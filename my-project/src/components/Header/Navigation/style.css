@@ -1,0 +1,48 @@
+.categoryPanel button {
+  text-transform: capitalize !important;
+}
+
+/* submenu cấp 1 và cấp 2 đều ẩn */
+.nav .submenu {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  display: block !important;
+}
+
+/* chỉ hover cấp 1: Fashion */
+.nav > li:hover > .submenu {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  top: 100% !important;
+}
+
+/* submenu con mặc định */
+.nav .submenu li .submenu {
+  top: 0 !important;
+  left: 120% !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* chỉ hover Men mới hiện submenu con */
+.nav .submenu li:hover > .submenu {
+  left: 100% !important;
+  top: 0 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+/* button trong submenu */
+.nav .submenu button {
+  font-weight: 400 !important;
+  color: rgba(0, 0, 0, 0.8) !important;
+  text-transform: capitalize !important;
+}
+
+.nav .submenu button:hover {
+  color: #ff5252 !important;
+}

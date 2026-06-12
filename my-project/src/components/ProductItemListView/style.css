@@ -1,0 +1,7 @@
+.productItem .title{line-height: 18px;}
+.productItem .actions button:hover svg{color: #fff !important;}
+
+.swiper-button-next, .swiper-button-prev {
+  color: #000 !important;
+  width: 10px;
+}
