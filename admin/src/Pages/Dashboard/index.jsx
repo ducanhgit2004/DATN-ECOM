@@ -1,4 +1,4 @@
-import React, { useState, PureComponent } from "react";
+import React, { useState, PureComponent, useContext } from "react";
 import {
   Tooltip,
   LineChart,
@@ -35,6 +35,7 @@ import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import { MyContext } from "../../App";
 
 const label = { slotProps: { input: { "aria-label": "Checkbox demo" } } };
 
@@ -170,6 +171,9 @@ const Dashboard = () => {
       setIsOpenOrderedProduct(index);
     }
   };
+
+  const context = useContext(MyContext);
+
   return (
     <>
       <div
@@ -188,7 +192,15 @@ const Dashboard = () => {
           </p>
           <br />
 
-          <Button className="btn-blue !capitalize">
+          <Button
+            className="btn-blue !capitalize"
+            onClick={() =>
+              context.setIsOpenFullScreenPanel({
+                open: true,
+                model: "Add Product",
+              })
+            }
+          >
             <FaPlus />
             Add Product
           </Button>
@@ -229,7 +241,17 @@ const Dashboard = () => {
 
           <div className="col w-[25%] ml-auto flex items-center justify-end gap-3">
             <Button className="btn-blue !bg-green-500">Export</Button>
-            <Button className="btn-blue !text-white">Add Product</Button>
+            <Button
+              className="btn-blue !text-white"
+              onClick={() =>
+                context.setIsOpenFullScreenPanel({
+                  open: true,
+                  model: "Add Product",
+                })
+              }
+            >
+              Add Product
+            </Button>
           </div>
         </div>
 
@@ -871,7 +893,17 @@ const Dashboard = () => {
 
           <div className="col w-[25%] ml-auto flex items-center justify-end gap-3">
             <Button className="btn-blue !bg-green-500">Export</Button>
-            <Button className="btn-blue !text-white">Add Product</Button>
+            <Button
+              className="btn-blue !text-white"
+              onClick={() =>
+                context.setIsOpenFullScreenPanel({
+                  open: true,
+                  model: "Add Product",
+                })
+              }
+            >
+              Add Product
+            </Button>
           </div>
         </div>
 
