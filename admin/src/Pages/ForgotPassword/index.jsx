@@ -1,21 +1,62 @@
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import React, { useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { CgLogIn } from "react-icons/cg";
 import { FaRegUser } from "react-icons/fa";
+import { postData } from "../../utils/api";
 
 const ForgotPassword = () => {
+  const [email, setEmail] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      window.alert("Please enter your email.");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      const response = await postData("/api/user/forgot-password", {
+        email: normalizedEmail,
+      });
+
+      if (response?.error !== true) {
+        localStorage.setItem("resetPasswordEmail", normalizedEmail);
+        localStorage.setItem("userEmail", normalizedEmail);
+        localStorage.setItem("forgotPasswordFlow", "true");
+
+        navigate("/verify-account", {
+          state: {
+            email: normalizedEmail,
+            mode: "forgot-password",
+          },
+        });
+      } else {
+        window.alert(response?.message || "Failed to send OTP.");
+      }
+    } catch (error) {
+      window.alert(error?.message || "Failed to send OTP.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <section className="relative min-h-screen w-full  overflow-hidden">
-      {/* Background */}
+    <section className="relative min-h-screen w-full overflow-hidden">
       <img
         src="backlogin.PNG"
         alt="background"
-        className="fixed inset-0 w-full h-full object-cover opacity-5 -z-10"
+        className="fixed inset-0 -z-10 h-full w-full object-cover opacity-5"
       />
 
-      {/* Header */}
-      <header className="fixed top-0 left-0 w-full px-6 py-4 flex items-center justify-between z-50">
+      <header className="fixed left-0 top-0 z-50 flex w-full items-center justify-between px-6 py-4">
         <Link to="/">
           <img
             src="https://ecme-react.themenate.net/img/logo/logo-light-full.png"
@@ -25,15 +66,15 @@ const ForgotPassword = () => {
         </Link>
 
         <div className="flex items-center">
-          <NavLink to="/login" exact={true} activeClassName="isActive">
-            <Button className="!rounded-full !text-[rgba(0,0,0,0.8)] !px-5 !gap-2 !text-[15px] !font-[600]">
+          <NavLink to="/login">
+            <Button className="!rounded-full !px-5 !gap-2 !text-[15px] !font-[600] !text-[rgba(0,0,0,0.8)]">
               <CgLogIn className="text-[18px]" />
               Login
             </Button>
           </NavLink>
 
-          <NavLink to="/sign-up" exact={true} activeClassName="isActive">
-            <Button className="!rounded-full !text-[rgba(0,0,0,0.8)] !px-5 !gap-2 !text-[15px] !font-[600]">
+          <NavLink to="/sign-up">
+            <Button className="!rounded-full !px-5 !gap-2 !text-[15px] !font-[600] !text-[rgba(0,0,0,0.8)]">
               <FaRegUser className="text-[15px]" />
               Sign Up
             </Button>
@@ -41,9 +82,8 @@ const ForgotPassword = () => {
         </div>
       </header>
 
-      {/* Login Form */}
-      <div className="min-h-screen flex items-center justify-center px-4 py-20">
-        <div className="w-full max-w-[600px] relative z-50">
+      <div className="flex min-h-screen items-center justify-center px-4 py-20">
+        <div className="relative z-50 w-full max-w-[600px]">
           <div className="text-center">
             <img
               src="https://isomorphic-furyroad.vercel.app/_next/static/media/logo-primary.f9d5d4f7.svg"
@@ -52,35 +92,46 @@ const ForgotPassword = () => {
             />
           </div>
 
-          <h1 className="text-center text-[35px] font-[800] mt-4 leading-tight">
+          <h1 className="mt-4 text-center text-[35px] font-[800] leading-tight">
             Having trouble to sign in?
             <br />
             Reset your password.
           </h1>
 
-          <br />
-
-          <form className="w-full mt-6">
+          <form className="mt-6 w-full" onSubmit={handleSubmit}>
             <div className="mb-4">
-              <h4 className="text-[14px] font-[500] mb-1">Email</h4>
+              <h4 className="mb-1 text-[14px] font-[500]">Email</h4>
 
               <input
                 type="email"
-                className="w-full h-[50px] border-2 border-[rgba(0,0,0,0.1)] rounded-sm px-3 focus:outline-none focus:border-[rgba(0,0,0,0.7)]"
+                value={email}
+                disabled={isLoading}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                }}
+                className="h-[50px] w-full rounded-sm border-2 border-[rgba(0,0,0,0.1)] px-3 focus:border-[rgba(0,0,0,0.7)] focus:outline-none"
                 placeholder="Enter your email"
               />
             </div>
 
-            <Button className="btn-blue btn-lg w-full">Reset Password</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isLoading || !email.trim()}
+              className="!h-[45px] !w-full !bg-[#3872fa]"
+            >
+              {isLoading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                "Send OTP"
+              )}
+            </Button>
 
-            <br />
-            <br />
-
-            <div className="text-center flex items-center justify-center gap-2">
+            <div className="mt-6 flex items-center justify-center gap-2 text-center">
               <span>Remember Password?</span>
               <Link
                 to="/login"
-                className="text-[#3872fa] text-[15px] font-[700] hover:underline"
+                className="text-[15px] font-[700] text-[#3872fa] hover:underline"
               >
                 Sign in
               </Link>

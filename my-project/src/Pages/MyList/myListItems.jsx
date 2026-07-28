@@ -1,46 +1,71 @@
-import React, { useState } from "react";
+import { useContext } from "react";
 import { Link } from "react-router-dom";
 import { IoCloseSharp } from "react-icons/io5";
 import Rating from "@mui/material/Rating";
 import { Button } from "@mui/material";
+import { MyContext } from "../../App";
 
-const MyListItems = (props) => {
+const money = (value) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(Number(value) || 0);
+
+const MyListItems = ({ item }) => {
+  const { removeFromMyList, addToCart } = useContext(MyContext);
+
   return (
-    <div className="cartItem w-full p-3 flex items-center gap-4 pb-5 border-b border-[rgba(0,0,0,0.1)]">
-      <div className="img w-[10%] rounded-md overflow-hidden">
-        <Link to="/product/7845" className="group">
+    <article className="w-full p-4 flex items-start gap-4 border-b border-gray-100 last:border-b-0">
+      <div className="w-[100px] h-[130px] sm:w-[120px] sm:h-[145px] shrink-0 rounded-lg overflow-hidden bg-gray-50">
+        <Link to={`/product/${item.productId}`} className="group block h-full">
           <img
-            src="vay3.PNG"
-            className="w-full group-hover:scale-105 transition-all"
+            src={item.image || "/placeholder-image.png"}
+            alt={item.productTitle}
+            className="w-full h-full object-cover object-top group-hover:scale-105 transition-all"
           />
         </Link>
       </div>
 
-      <div className="info w-[90%] relative">
-        <IoCloseSharp
-          className="cursor-pointer absolute top-[0px] right-[6px]
-                                text-[22px] link transition-all"
-        />
-        <span className="text-[13px]">Juno</span>
-        <h3 className="text-[16px]">
-          <Link className="link">Quần giả váy xếp ly Juno</Link>
+      <div className="min-w-0 flex-1 relative pr-8">
+        <button
+          type="button"
+          aria-label={`Remove ${item.productTitle} from My List`}
+          onClick={() => removeFromMyList(item._id)}
+          className="absolute top-0 right-0 text-gray-500 hover:text-[#ff5252] transition-colors"
+        >
+          <IoCloseSharp size={23} />
+        </button>
+        <span className="text-[13px] text-gray-500">{item.brand}</span>
+        <h3 className="text-[16px] font-medium truncate">
+          <Link to={`/product/${item.productId}`} className="link">
+            {item.productTitle}
+          </Link>
         </h3>
 
-        <Rating name="size-small" defaultValue={2} size="small" readOnly />
+        <Rating value={Number(item.rating) || 0} size="small" readOnly />
 
-        <div className="flex items-center gap-4 mt-2 mb-2">
-          <span className="price  font-[600] text-[14px]">$30.00</span>
-          <span className="oldPrice line-through text-gray-500 text-[14px] font-[500]">
-            $58.00
-          </span>
-          <span className="price text-[#ff5252] font-[600] text-[14px]">
-            52% OFF
-          </span>
+        <div className="flex flex-wrap items-center gap-3 mt-2 mb-3">
+          <span className="font-semibold text-[15px]">{money(item.price)}</span>
+          {Number(item.oldPrice) > Number(item.price) && (
+            <span className="line-through text-gray-400 text-[14px]">
+              {money(item.oldPrice)}
+            </span>
+          )}
+          {Number(item.discount) > 0 && (
+            <span className="text-[#ff5252] font-semibold text-[13px]">
+              {item.discount}% OFF
+            </span>
+          )}
         </div>
 
-        <Button className="btn-org btn-sm">Add to Cart</Button>
+        <Button
+          className="btn-org btn-sm"
+          onClick={() => addToCart(item.productId)}
+        >
+          Add to Cart
+        </Button>
       </div>
-    </div>
+    </article>
   );
 };
 

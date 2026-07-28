@@ -119,6 +119,10 @@ nav ul button:hover {
   --swiper-navigation-size: 22px;
 }
 
+.homeSlider > .container {
+  width: 98%;
+}
+
 .homeCatSlider {
   --swiper-navigation-color: #000;
   --swiper-navigation-size: 22px;
@@ -331,6 +335,19 @@ footer form input::placeholder {
   color: rgba(0, 0, 0, 0.7);
 }
 
+.product-gallery-image {
+  transition: transform 120ms ease-out;
+  will-change: transform;
+}
+
+.product-gallery-image-frame:hover .product-gallery-image {
+  transform: scale(1.5);
+}
+
+.product-gallery-thumbs {
+  scrollbar-width: thin;
+}
+
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
@@ -346,7 +363,13 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .productDetailsModal .MuiDialogContent-root {
-  padding: 0px !important;
+  padding: 28px !important;
+}
+
+@media (max-width: 1023px) {
+  .productDetailsModal .MuiDialogContent-root {
+    padding: 20px !important;
+  }
 }
 
 .cartPanel .MuiPaper-root {

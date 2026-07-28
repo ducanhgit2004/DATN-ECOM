@@ -1,151 +1,36 @@
-import React, { useState } from 'react'
-import FormControlLabel from '@mui/material/FormControlLabel'
-import Checkbox from '@mui/material/Checkbox'
-import Button from '@mui/material/Button'
-import Slider from '@mui/material/Slider'
-import Rating from '@mui/material/Rating';
+import { useState } from "react";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Checkbox from "@mui/material/Checkbox";
+import Button from "@mui/material/Button";
+import Slider from "@mui/material/Slider";
+import Rating from "@mui/material/Rating";
+import { Collapse } from "react-collapse";
+import { FaAngleDown, FaAngleUp } from "react-icons/fa6";
+import "./style.css";
 
-import { Collapse } from 'react-collapse'
-import { FaAngleDown, FaAngleUp } from 'react-icons/fa6'
-import "../Sidebar/style.css"
+const FilterHeading = ({ children, open, onToggle }) => <h3 className="w-full mb-3 text-[15px] font-[600] flex items-center">
+  {children}<Button aria-label={`Toggle ${children}`} className="!w-[30px] !h-[30px] !min-w-[30px] !rounded-full !ml-auto !text-black" onClick={onToggle}>{open ? <FaAngleUp /> : <FaAngleDown />}</Button>
+</h3>;
 
-const Sidebar = () => {
-  const [isOpenCategoryFilter, setIsOpenCategoryFilter] = useState(true)
-  const [isOpenAvailFilter, setIsOpenAvailFilter] = useState(true)
-  const [isOpenSizeFilter, setIsOpenSizeFilter] = useState(true)
-  const [price, setPrice] = useState([100, 100000])
+const ProductFilterSidebar = ({ categories, categoryCounts, selectedCategories, onCategoryToggle, priceBounds, priceRange, onPriceChange, selectedRating, onRatingChange, onClear, hasFilters }) => {
+  const [open, setOpen] = useState({ categories: true, price: true, rating: true });
+  const toggle = (key) => setOpen((current) => ({ ...current, [key]: !current[key] }));
+  const priceStep = Math.max(1, Math.round((priceBounds[1] - priceBounds[0]) / 100));
+  return <aside className="productFilterSidebar bg-white rounded-xl border border-gray-200 p-4 sticky top-4">
+    <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4"><h2 className="font-[700] text-[17px]">Product Filters</h2>{hasFilters && <button type="button" onClick={onClear} className="text-xs font-semibold text-[#ff5252] hover:underline">Clear all</button>}</div>
+    <div className="box">
+      <FilterHeading open={open.categories} onToggle={() => toggle("categories")}>Shop by Categories</FilterHeading>
+      <Collapse isOpened={open.categories}><div className="scroll px-1">{categories.map((category) => <FormControlLabel key={category._id} control={<Checkbox size="small" checked={selectedCategories.includes(category._id)} onChange={() => onCategoryToggle(category._id)} />} label={<span className="flex w-full items-center justify-between gap-3 text-sm"><span>{category.name}</span><span className="text-gray-400">({categoryCounts[category._id] || 0})</span></span>} className="!m-0 w-full productFilterOption" />)}</div></Collapse>
+    </div>
+    <div className="box mt-5 pt-4 border-t border-gray-100">
+      <FilterHeading open={open.price} onToggle={() => toggle("price")}>Filter By Price</FilterHeading>
+      <Collapse isOpened={open.price}><div className="px-2"><Slider className="priceSlider" value={priceRange} onChange={(_, value) => onPriceChange(value)} valueLabelDisplay="auto" min={priceBounds[0]} max={priceBounds[1]} step={priceStep} disableSwap /><div className="flex pt-3 pb-1 priceRange"><span className="text-[12px] text-gray-500">From: <strong className="text-gray-800">${priceRange[0].toLocaleString()}</strong></span><span className="ml-auto text-[12px] text-gray-500">To: <strong className="text-gray-800">${priceRange[1].toLocaleString()}</strong></span></div></div></Collapse>
+    </div>
+    <div className="box mt-5 pt-4 border-t border-gray-100">
+      <FilterHeading open={open.rating} onToggle={() => toggle("rating")}>Filter By Rating</FilterHeading>
+      <Collapse isOpened={open.rating}><div className="space-y-1">{[5, 4, 3, 2, 1].map((rating) => <button type="button" key={rating} onClick={() => onRatingChange(selectedRating === rating ? 0 : rating)} className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 transition ${selectedRating === rating ? "bg-red-50 ring-1 ring-red-100" : "hover:bg-gray-50"}`}><span className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedRating === rating ? "border-[#ff5252]" : "border-gray-300"}`}>{selectedRating === rating && <span className="w-2 h-2 rounded-full bg-[#ff5252]" />}</span><Rating value={rating} size="small" readOnly /><span className="text-xs text-gray-500">& up</span></button>)}</div></Collapse>
+    </div>
+  </aside>;
+};
 
-  const handlePriceChange = (event, newValue) => {
-    setPrice(newValue)
-  }
-
-  return (
-    <aside className='sidebar py-5'>
-      <div className='box'>
-        <h3 className="w-full mb-3 text-[16px] font-[600] flex items-center pr-5">
-          Shop by Categories
-
-          <Button
-            className='!w-[30px] !h-[30px] !min-w-[30px] !rounded-full !ml-auto !text-black'
-            onClick={() => setIsOpenCategoryFilter(!isOpenCategoryFilter)}
-          >
-            {isOpenCategoryFilter ? <FaAngleUp /> : <FaAngleDown />}
-          </Button>
-        </h3>
-
-        <Collapse isOpened={isOpenCategoryFilter}>
-          <div className='scroll px-4 relative -left-[13px]'>
-            <FormControlLabel control={<Checkbox size="small" />} label="Fashion" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="Electronics" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="Bags" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="Footwear" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="Groceries" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="Beauty" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="Wellness" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="Jewellery" className='w-full' />
-          </div>
-        </Collapse>
-      </div>
-
-      <div className='box mt-3'>
-        <h3 className="w-full mb-3 text-[16px] font-[600] flex items-center pr-5">
-          Availability
-
-          <Button
-            className='!w-[30px] !h-[30px] !min-w-[30px] !rounded-full !ml-auto !text-black'
-            onClick={() => setIsOpenAvailFilter(!isOpenAvailFilter)}
-          >
-            {isOpenAvailFilter ? <FaAngleUp /> : <FaAngleDown />}
-          </Button>
-        </h3>
-
-        <Collapse isOpened={isOpenAvailFilter}>
-          <div className='scroll px-4 relative -left-[13px]'>
-            <FormControlLabel control={<Checkbox size="small" />} label="Available (17)" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="In stock (10)" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="Not available (1)" className='w-full' />
-          </div>
-        </Collapse>
-      </div>
-
-      <div className='box mt-3'>
-        <h3 className="w-full mb-3 text-[16px] font-[600] flex items-center pr-5">
-          Size
-
-          <Button
-            className='!w-[30px] !h-[30px] !min-w-[30px] !rounded-full !ml-auto !text-black'
-            onClick={() => setIsOpenSizeFilter(!isOpenSizeFilter)}
-          >
-            {isOpenSizeFilter ? <FaAngleUp /> : <FaAngleDown />}
-          </Button>
-        </h3>
-
-        <Collapse isOpened={isOpenSizeFilter}>
-          <div className='scroll px-4 relative -left-[13px]'>
-            <FormControlLabel control={<Checkbox size="small" />} label="Small (17)" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="Medium (10)" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="Large (1)" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="XL" className='w-full' />
-            <FormControlLabel control={<Checkbox size="small" />} label="XXL" className='w-full' />
-          </div>
-        </Collapse>
-      </div>
-
-      <div className='box mt-4'>
-        <h3 className="w-full mb-3 text-[16px] font-[600] flex items-center pr-5">
-          Filter By Price
-        </h3>
-
-        <div className="px-2">
-          <Slider className='priceSlider'
-            value={price}
-            onChange={handlePriceChange}
-            valueLabelDisplay="auto"
-            min={1}
-            max={1000}
-            step={10}
-            
-          />
-
-          <div className="flex pt-4 pb-2 priceRange">
-            <span className='text-[13px]'>
-              From: <strong className='text-dark'>$ {price[0].toLocaleString()}</strong>
-            </span>
-
-            <span className='ml-auto text-[13px]'>
-              To: <strong className='text-dark'>$ {price[1].toLocaleString()}</strong>
-            </span>
-          </div>
-        </div>
-      </div>
-
-
-      <div className='box mt-4'>
-        <h3 className="w-full mb-3 text-[16px] font-[600] flex items-center pr-5">
-          Filter By Rating
-        </h3>
-      <div className='w-full'>
-        <Rating name="size-small" defaultValue={5} size="small" readOnly/>
-      </div>
-      <div className='w-full'>
-        <Rating name="size-small" defaultValue={4} size="small" readOnly/>
-      </div>
-      <div className='w-full'>
-        <Rating name="size-small" defaultValue={3} size="small" readOnly/>
-      </div>
-      <div className='w-full'>
-        <Rating name="size-small" defaultValue={2} size="small" readOnly/>
-      </div>
-      <div className='w-full'>
-        <Rating name="size-small" defaultValue={1} size="small" readOnly/>
-      </div>
-       
-
-       </div> 
-
-
-    </aside>
-  )
-}
-
-export default Sidebar
+export default ProductFilterSidebar;

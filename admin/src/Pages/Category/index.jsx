@@ -1,13 +1,7 @@
-import React, { useContext, useState } from "react";
-import { Button } from "@mui/material";
-import { IoMdAdd } from "react-icons/io";
-import Checkbox from "@mui/material/Checkbox";
-import { Link } from "react-router-dom";
-import Progess from "../../components/ProgessBar";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { Button, Checkbox, CircularProgress } from "@mui/material";
 import { AiOutlineEdit } from "react-icons/ai";
-import { FaRegEye } from "react-icons/fa";
 import { GoTrash } from "react-icons/go";
-
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -15,238 +9,219 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
-import Pagination from "@mui/material/Pagination";
-import SearchBox from "../../components/SearchBox";
 import { MyContext } from "../../App";
-
-const label = { slotProps: { input: { "aria-label": "Checkbox demo" } } };
+import ConfirmDialog from "../../components/ConfirmDialog";
+import { deleteData, fetchDataFromApi } from "../../utils/api";
 
 const CategoryList = () => {
+  const context = useContext(MyContext);
+  const { alertBox, categoryRefreshKey } = context;
+  const [categories, setCategories] = useState([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [categoryFilterVal, setcategoryFilterVal] = useState("");
-  const id = "category-select";
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState(null);
 
-  const context = useContext(MyContext);
+  useEffect(() => {
+    let active = true;
+    const loadCategories = async () => {
+      setLoading(true);
+      const result = await fetchDataFromApi("/api/category");
+      if (!active) return;
+      if (result?.success) setCategories(result.data || []);
+      else
+        alertBox(
+          "error",
+          result?.message || "Không thể tải danh sách danh mục",
+        );
+      setLoading(false);
+    };
+    loadCategories();
+    return () => {
+      active = false;
+    };
+  }, [alertBox, categoryRefreshKey]);
 
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+  const filtered = useMemo(
+    () =>
+      categories.filter((item) =>
+        item.name?.toLowerCase().includes(search.trim().toLowerCase()),
+      ),
+    [categories, search],
+  );
+  const safePage = Math.min(
+    page,
+    Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1),
+  );
+  const visibleRows = filtered.slice(
+    safePage * rowsPerPage,
+    safePage * rowsPerPage + rowsPerPage,
+  );
+  const visibleIds = visibleRows.map((item) => item._id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.includes(id)) && !allVisibleSelected;
+  const toggleOne = (id) => setSelectedIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
+  const toggleVisible = () => setSelectedIds((ids) => allVisibleSelected ? ids.filter((id) => !visibleIds.includes(id)) : [...new Set([...ids, ...visibleIds])]);
+  const deleteSelected = async () => {
+    if (!selectedIds.length) return;
+    setBulkDeleting(true);
+    const results = await Promise.all(selectedIds.map((id) => deleteData(`/api/category/${id}`)));
+    const deletedIds = selectedIds.filter((_, index) => results[index]?.success);
+    setCategories((items) => items.filter((item) => !deletedIds.includes(item._id)));
+    setSelectedIds((ids) => ids.filter((id) => !deletedIds.includes(id)));
+    setBulkDeleting(false);
+    if (deletedIds.length) alertBox("success", `${deletedIds.length} categories deleted successfully.`);
+    if (deletedIds.length !== results.length) alertBox("error", `${results.length - deletedIds.length} categories could not be deleted.`);
+    if (deletedIds.length) context.setCategoryRefreshKey((key) => key + 1);
+    setDeleteDialog(null);
   };
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+  const removeCategory = async (category) => {
+    setDeletingId(category._id);
+    const result = await deleteData(`/api/category/${category._id}`);
+    if (result?.success) {
+      setCategories((items) =>
+        items.filter((item) => item._id !== category._id),
+      );
+      setSelectedIds((ids) => ids.filter((id) => id !== category._id));
+      context.alertBox("success", "Deleted");
+    } else context.alertBox("error", result?.message || "Delete Failed");
+    setDeletingId(null);
+    setDeleteDialog(null);
   };
 
-  const handleChangeCatFilter = (event) => {
-    setcategoryFilterVal(event.target.value);
-  };
+  const openEditor = (category = null) =>
+    context.setIsOpenFullScreenPanel({
+      open: true,
+      model: category ? "Edit Category" : "Add New Category",
+      category,
+    });
 
-  const columns = [
-    { id: "image", label: "IMAGE", minWidth: 150 },
-    { id: "catName", label: "CATEGORY NAME", minWidth: 150 },
-    { id: "action", label: "Action", minWidth: 100 },
-  ];
   return (
     <>
-      <div className="flex items-center justify-between px-2 py-0 mt-3">
+      <div className="flex items-center justify-between px-2 mt-3 gap-4">
         <h2 className="text-[20px] font-[600]">
           Category List{" "}
-          <span className="font-[400] text-[12px]">(Material Ui table)</span>
+          <span className="font-[400] text-[12px]">
+            ({filtered.length} categories)
+          </span>
         </h2>
-
-        <div className="col w-[25%] ml-auto flex items-center justify-end gap-3">
-          <Button className="btn-blue !bg-green-500">Export</Button>
-          <Button
-            className="btn-blue !text-white"
-            onClick={() =>
-              context.setIsOpenFullScreenPanel({
-                open: true,
-                model: "Add New Category",
-              })
-            }
-          >
-            Add New Category
-          </Button>
-        </div>
+        <div className="flex gap-2">{selectedIds.length > 0 && <Button color="error" variant="contained" disabled={bulkDeleting} onClick={() => setDeleteDialog({ type: "bulk" })}>{bulkDeleting ? "Deleting..." : `Delete Selected (${selectedIds.length})`}</Button>}<Button className="btn-blue !text-white" onClick={() => openEditor()}>
+          Add New Category
+        </Button></div>
       </div>
       <div className="card my-4 pt-5 shadow-md rounded-lg border border-gray-200 bg-white">
+        <div className="px-5 pb-4">
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
+            placeholder="Search...."
+            className="w-full max-w-[420px] h-[40px] border border-gray-300 rounded px-3 text-sm focus:outline-none focus:border-blue-500"
+          />
+        </div>
         <TableContainer sx={{ maxHeight: 600 }}>
-          <Table stickyHeader aria-label="sticky table">
+          <Table stickyHeader aria-label="category table">
             <TableHead>
               <TableRow>
-                <TableCell width={60} className="bg-[#ccc]">
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                {columns.map((column) => (
-                  <TableCell
-                    width={column.minWidth}
-                    key={column.id}
-                    align={column.align}
-                  >
-                    {column.label}
-                  </TableCell>
-                ))}
+                <TableCell padding="checkbox"><Checkbox checked={allVisibleSelected} indeterminate={someVisibleSelected} onChange={toggleVisible} inputProps={{ "aria-label": "Select all visible categories" }} /></TableCell>
+                <TableCell width={130}>IMAGE</TableCell>
+                <TableCell>CATEGORY NAME</TableCell>
+                <TableCell width={150}>ACTION</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              <TableRow>
-                <TableCell>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell width={100}>
-                  <div className="flex items-center gap-4 w-[80px]">
-                    <div className="img w-[full] h-auto rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={4} align="center" sx={{ py: 6 }}>
+                    <CircularProgress />
+                  </TableCell>
+                </TableRow>
+              ) : visibleRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} align="center" sx={{ py: 6 }}>
+                    There is 0 category
+                  </TableCell>
+                </TableRow>
+              ) : (
+                visibleRows.map((category) => (
+                  <TableRow hover key={category._id}>
+                    <TableCell padding="checkbox"><Checkbox checked={selectedIds.includes(category._id)} onChange={() => toggleOne(category._id)} inputProps={{ "aria-label": `Select ${category.name}` }} /></TableCell>
+                    <TableCell>
+                      <div className="w-[72px] h-[72px] rounded-md overflow-hidden bg-gray-100">
                         <img
-                          src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSqWuPAmmy3ADWPfH9JqeIXu1vMAxzS3kL1iQ&s"
-                          className="w-full group-hover:scale-105 transition-all"
+                          src={category.images?.[0] || "/placeholder-image.png"}
+                          alt={category.name}
+                          className="w-full h-full object-cover"
                         />
-                      </Link>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell width={100}>Fashion</TableCell>
-
-                <TableCell width={100}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell width={100}>
-                  <div className="flex items-center gap-4 w-[80px]">
-                    <div className="img w-[full] h-auto rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSqWuPAmmy3ADWPfH9JqeIXu1vMAxzS3kL1iQ&s"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell width={100}>Fashion</TableCell>
-
-                <TableCell width={100}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell width={100}>
-                  <div className="flex items-center gap-4 w-[80px]">
-                    <div className="img w-[full] h-auto rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSqWuPAmmy3ADWPfH9JqeIXu1vMAxzS3kL1iQ&s"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell width={100}>Fashion</TableCell>
-
-                <TableCell width={100}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-[500]">{category.name}</span>
+                      {category.children?.length > 0 && (
+                        <span className="ml-2 text-xs text-gray-500">
+                          ({category.children.length} subcategories)
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          title="Chỉnh sửa"
+                          aria-label={`Chỉnh sửa ${category.name}`}
+                          onClick={() => openEditor(category)}
+                          className="!w-[35px] !h-[35px] !min-w-[35px] !rounded-full !bg-gray-100"
+                        >
+                          <AiOutlineEdit className="text-[20px]" />
+                        </Button>
+                        <Button
+                          disabled={deletingId === category._id}
+                          title="Xóa"
+                          aria-label={`Xóa ${category.name}`}
+                          onClick={() => setDeleteDialog({ type: "single", category })}
+                          className="!w-[35px] !h-[35px] !min-w-[35px] !rounded-full !bg-red-50 !text-red-600"
+                        >
+                          {deletingId === category._id ? (
+                            <CircularProgress size={18} />
+                          ) : (
+                            <GoTrash className="text-[19px]" />
+                          )}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
         <TablePagination
-          rowsPerPageOptions={[10, 25, 100]}
+          rowsPerPageOptions={[5, 10, 25]}
           component="div"
-          count={10}
+          count={filtered.length}
           rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
+          page={safePage}
+          onPageChange={(_, nextPage) => setPage(nextPage)}
+          onRowsPerPageChange={(event) => {
+            setRowsPerPage(parseInt(event.target.value, 10));
+            setPage(0);
+          }}
         />
-
-        <div className="flex items-center justify-end pt-5 pb-5 px-4">
-          <Pagination count={10} color="primary" />
-        </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(deleteDialog)}
+        title={deleteDialog?.type === "bulk" ? "Delete selected categories?" : "Delete category?"}
+        message={deleteDialog?.type === "bulk" ? `You are about to delete ${selectedIds.length} selected categories and their nested categories. This action cannot be undone.` : `You are about to delete “${deleteDialog?.category?.name || "this category"}” and all of its nested categories. This action cannot be undone.`}
+        loading={bulkDeleting || Boolean(deletingId)}
+        onClose={() => setDeleteDialog(null)}
+        onConfirm={() => deleteDialog?.type === "bulk" ? deleteSelected() : removeCategory(deleteDialog.category)}
+      />
     </>
   );
 };

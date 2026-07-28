@@ -1,133 +1,24 @@
-import React, { useRef, useState } from "react";
-import { InnerImageZoom } from "react-inner-image-zoom";
-import "react-inner-image-zoom/lib/styles.min.css";
-import { Swiper, SwiperSlide } from "swiper/react";
-import "swiper/css";
-import "swiper/css/navigation";
-import { Navigation } from "swiper/modules";
+import { useState } from "react";
 
-const ProductZoom = () => {
-
-      const [slideIndex, setSlideIndex] = useState(0)
-      const zoomSliderBig = useRef();
-      const zoomSliderSml = useRef();
-
-      const goto = (index) => {
-        setSlideIndex(index);
-        zoomSliderSml.current.swiper.slideTo(index)
-        zoomSliderBig.current.swiper.slideTo(index)
-      }
-
-  return (
-    <>
-      <div className="flex gap-3">
-        <div className="slider w-[15%]">
-          <Swiper
-            ref={zoomSliderSml}
-            direction={"vertical"}
-            slidesPerView={4}
-            spaceBetween={10}
-            navigation={true}
-            modules={[Navigation]}
-            className="zoomProductSliderThumbs h-[550px] overflow-hidden"
-          >
-            <SwiperSlide>
-              <div className={`item rounded-md overflow-hidden cursor-pointer group 
-              ${slideIndex===0 ? 'opacity-100' : 'opacity-30'}`} onClick=
-              {() => goto(0)}>
-                <img
-                  src="/vay2.jpg"
-                  className="w-full transition-all group-hover:scale-105"
-                />
-              </div>
-            </SwiperSlide>
-
-            <SwiperSlide>
-              <div className={`item rounded-md overflow-hidden cursor-pointer group 
-              ${slideIndex===1 ? 'opacity-100' : 'opacity-30'}`} onClick=
-              {() => goto(1)}>
-                <img
-                  src="/vay6.png"
-                  className="w-full transition-all group-hover:scale-105"
-                />
-              </div>
-            </SwiperSlide>
-
-            <SwiperSlide>
-              <div className={`item rounded-md overflow-hidden cursor-pointer group 
-              ${slideIndex===2 ? 'opacity-100' : 'opacity-30'}`} onClick=
-              {() => goto(2)}>
-                <img
-                  src="/vay4.jpeg"
-                  className="w-full transition-all group-hover:scale-105"
-                />
-              </div>
-            </SwiperSlide>
-
-            <SwiperSlide>
-              <div className={`item rounded-md overflow-hidden cursor-pointer group 
-              ${slideIndex===3 ? 'opacity-100' : 'opacity-30'}`} onClick=
-              {() => goto(3)}>
-                <img
-                  src="/vay5.jpeg"
-                  className="w-full transition-all group-hover:scale-105"
-                />
-              </div>
-            </SwiperSlide>
-
-            <SwiperSlide>
-              <div className={`item rounded-md overflow-hidden cursor-pointer group 
-              ${slideIndex===4 ? 'opacity-100' : 'opacity-30'}`} onClick=
-              {() => goto(4)}>
-                <img
-                  src="/vay7.png"
-                  className="w-full transition-all group-hover:scale-105"
-                />
-              </div>
-            </SwiperSlide>
-            
-
-           
-          </Swiper>
-        </div>
-
-        <div className="zoomContainer w-[85%] h-[550px] overflow-hidden rounded-md">
-          <Swiper
-            ref={zoomSliderBig}
-            slidesPerView={1}
-            spaceBetween={0}
-            navigation={false}
-          >
-            <SwiperSlide>
-              <InnerImageZoom src="/vay2.jpg" zoomType="hover" zoomScale={1} 
-              />
-            </SwiperSlide>
-            
-            <SwiperSlide>
-              <InnerImageZoom src="/vay6.png" zoomType="hover" zoomScale={1} 
-              />
-            </SwiperSlide>
-
-            <SwiperSlide>
-              <InnerImageZoom src="/vay4.jpeg" zoomType="hover" zoomScale={1} 
-              />
-            </SwiperSlide>
-
-            <SwiperSlide>
-              <InnerImageZoom src="/vay5.jpeg" zoomType="hover" zoomScale={1} 
-              />
-            </SwiperSlide>
-
-            <SwiperSlide>
-              <InnerImageZoom src="/vay7.png" zoomType="hover" zoomScale={1} 
-              />
-            </SwiperSlide>
-          
-          </Swiper>
-        </div>
+const ProductZoom = ({ product }) => {
+  const images = product?.images?.length ? product.images : ["/placeholder-image.png"];
+  const [selected, setSelected] = useState(0);
+  const [zoomOrigin, setZoomOrigin] = useState("50% 50%");
+  const safeSelected = Math.min(selected, images.length - 1);
+  const moveZoom = (event) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - bounds.left) / bounds.width) * 100;
+    const y = ((event.clientY - bounds.top) / bounds.height) * 100;
+    setZoomOrigin(`${x}% ${y}%`);
+  };
+  return <div className="product-gallery flex flex-col-reverse sm:flex-row gap-3 w-full min-w-0">
+    <div className="product-gallery-thumbs flex sm:flex-col gap-3 sm:w-[82px] max-h-[560px] overflow-auto shrink-0">{images.map((image, index) => <button type="button" key={`${image}-${index}`} onClick={() => setSelected(index)} aria-label={`View product image ${index + 1}`} className={`w-[72px] h-[88px] shrink-0 rounded-md overflow-hidden border-2 bg-white p-1 ${safeSelected === index ? "border-[#ff5252]" : "border-gray-200"}`}><img src={image} alt={`${product?.name || "Product"} ${index + 1}`} className="w-full h-full object-contain" /></button>)}</div>
+    <div className="product-gallery-main flex-1 min-w-0 flex items-start justify-center">
+      <div className="product-gallery-image-frame inline-block max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white cursor-zoom-in" onMouseMove={moveZoom} onMouseLeave={() => setZoomOrigin("50% 50%")}> 
+        <img src={images[safeSelected]} alt={product?.name || "Product"} className="product-gallery-image block w-auto max-w-full h-auto max-h-[560px]" style={{ transformOrigin: zoomOrigin }} />
       </div>
-    </>
-  );
+    </div>
+  </div>;
 };
 
 export default ProductZoom;

@@ -1,16 +1,19 @@
 import Button from "@mui/material/Button";
-import React, { useState, useContext } from "react";
-import { Link } from "react-router-dom";
+import { useState, useContext } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { RxDashboard } from "react-icons/rx";
 import { FaRegImage } from "react-icons/fa";
 import { FiUsers } from "react-icons/fi";
+import { MdOutlineStorefront } from "react-icons/md";
 import { RiProductHuntLine } from "react-icons/ri";
 import { TbCategory } from "react-icons/tb";
 import { IoBagCheck } from "react-icons/io5";
+import { TfiWrite } from "react-icons/tfi";
 import { IoMdLogOut } from "react-icons/io";
 import { FaAngleDown } from "react-icons/fa6";
 import Collapse from "@mui/material/Collapse";
 import { MyContext } from "../../App";
+import { fetchDataFromApi } from "../../utils/api";
 
 const Sidebar = () => {
   const [submenuIndex, setSubmenuIndex] = useState(null);
@@ -21,6 +24,19 @@ const Sidebar = () => {
   };
 
   const context = useContext(MyContext);
+  const navigate = useNavigate();
+  const logout = async () => {
+    try {
+      await fetchDataFromApi("/api/user/logout");
+    } finally {
+      localStorage.removeItem("accesstoken");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("verifyEmail");
+      context.setUserData(null);
+      context.setIslogin(false);
+      navigate("/login", { replace: true });
+    }
+  };
 
   return (
     <>
@@ -92,6 +108,23 @@ const Sidebar = () => {
                   >
                     <span className="block w-[5px] h-[5px] rounded-full bg-[rgba(0,0,0,0.2)]"></span>
                     Add Home Banner Slider
+                  </Button>
+                </li>
+                <li className="w-full">
+                  <Link to="/categoryBanners/list">
+                    <Button className="!text-[rgba(0,0,0,0.6)] !capitalize !justify-start !w-full !text-[13px] !font-[500] !pl-9 flex gap-3">
+                      <span className="block w-[5px] h-[5px] rounded-full bg-[rgba(0,0,0,0.2)]"></span>
+                      Category Banner List
+                    </Button>
+                  </Link>
+                </li>
+                <li className="w-full">
+                  <Button
+                    className="!text-[rgba(0,0,0,0.6)] !capitalize !justify-start !w-full !text-[13px] !font-[500] !pl-9 flex gap-3"
+                    onClick={() => context.setIsOpenFullScreenPanel({ open: true, model: "Add Category Banner" })}
+                  >
+                    <span className="block w-[5px] h-[5px] rounded-full bg-[rgba(0,0,0,0.2)]"></span>
+                    Add Category Banner
                   </Button>
                 </li>
               </ul>
@@ -218,7 +251,7 @@ const Sidebar = () => {
                     onClick={() =>
                       context.setIsOpenFullScreenPanel({
                         open: true,
-                        model: "Add New Sub Category",
+                        model: "Add New Subcategory",
                       })
                     }
                   >
@@ -226,8 +259,46 @@ const Sidebar = () => {
                     Add a sub category
                   </Button>
                 </li>
+                <li className="w-full">
+                  <Button
+                    className="!text-[rgba(0,0,0,0.6)] !capitalize !justify-start !w-full !text-[13px] !font-[500] !pl-9 flex gap-3"
+                    onClick={() =>
+                      context.setIsOpenFullScreenPanel({
+                        open: true,
+                        model: "Add Third-level Category",
+                      })
+                    }
+                  >
+                    <span className="block w-[5px] h-[5px] rounded-full bg-[rgba(0,0,0,0.2)]"></span>
+                    Add a 3-level category
+                  </Button>
+                </li>
               </ul>
             </Collapse>
+          </li>
+
+          <li>
+            <Button
+              className="w-full !capitalize !justify-start flex gap-3 !text-[16px] !text-[rgba(0,0,0,0.8)] !font-[500] items-center !py-2 hover:!bg-[#f1f1f1]"
+              onClick={() => isOpenSubMenu(4)}
+            >
+              <TfiWrite className="text-[18px]" /> <span>Blogs</span>
+              <span className="ml-auto block w-[30px] h-[30px] flex items-center justify-center"><FaAngleDown className={`transition-all ${submenuIndex === 4 ? "rotate-180" : ""}`} /></span>
+            </Button>
+            <Collapse in={submenuIndex === 4}>
+              <ul className="w-full">
+                <li><Link to="/blogs"><Button className="!text-[rgba(0,0,0,0.6)] !capitalize !justify-start !w-full !text-[13px] !font-[500] !pl-9 flex gap-3"><span className="block w-[5px] h-[5px] rounded-full bg-[rgba(0,0,0,0.2)]"></span>Blog Post List</Button></Link></li>
+                <li><Button onClick={() => context.setIsOpenFullScreenPanel({ open: true, model: "Add Blog Post" })} className="!text-[rgba(0,0,0,0.6)] !capitalize !justify-start !w-full !text-[13px] !font-[500] !pl-9 flex gap-3"><span className="block w-[5px] h-[5px] rounded-full bg-[rgba(0,0,0,0.2)]"></span>Add Blog Post</Button></li>
+              </ul>
+            </Collapse>
+          </li>
+          <li>
+            <Link to="/sellers">
+              <Button className="w-full !capitalize !justify-start flex gap-3 !text-[16px] !text-[rgba(0,0,0,0.8)] !font-[500] items-center !py-2 hover:!bg-[#f1f1f1]">
+                <MdOutlineStorefront className="text-[18px]" />
+                <span>Sellers</span>
+              </Button>
+            </Link>
           </li>
 
           <li>
@@ -243,6 +314,8 @@ const Sidebar = () => {
 
           <li>
             <Button
+              type="button"
+              onClick={logout}
               className="w-full !capitalize !justify-start flex gap-3 !text-[16px] 
             !text-[rgba(0,0,0,0.8)] !font-[500] items-center !py-2 hover:!bg-[#f1f1f1]"
             >

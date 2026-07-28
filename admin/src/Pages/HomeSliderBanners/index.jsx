@@ -1,159 +1,53 @@
-import React, { useContext, useState } from "react";
-import { Button } from "@mui/material";
-import { IoMdAdd } from "react-icons/io";
-import Checkbox from "@mui/material/Checkbox";
-import { Link } from "react-router-dom";
-import Progess from "../../components/ProgessBar";
+import { useContext, useEffect, useState } from "react";
+import { Button, Chip, CircularProgress, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow } from "@mui/material";
 import { AiOutlineEdit } from "react-icons/ai";
-import { FaRegEye } from "react-icons/fa";
 import { GoTrash } from "react-icons/go";
-
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TablePagination from "@mui/material/TablePagination";
-import TableRow from "@mui/material/TableRow";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
-import Pagination from "@mui/material/Pagination";
-import SearchBox from "../../components/SearchBox";
 import { MyContext } from "../../App";
-
-const label = { slotProps: { input: { "aria-label": "Checkbox demo" } } };
+import ConfirmDialog from "../../components/ConfirmDialog";
+import { deleteData, fetchDataFromApi } from "../../utils/api";
 
 const HomeSliderBanners = () => {
+  const context = useContext(MyContext);
+  const { alertBox, homeSliderRefreshKey } = context;
+  const [slides, setSlides] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [categoryFilterVal, setcategoryFilterVal] = useState("");
-  const id = "category-select";
 
-  const context = useContext(MyContext);
+  useEffect(() => {
+    let active = true;
+    fetchDataFromApi("/api/home-sliders").then((result) => {
+      if (!active) return;
+      if (result?.success) setSlides(result.data || []);
+      else alertBox("error", result?.message || "Unable to load home sliders.");
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, [alertBox, homeSliderRefreshKey]);
 
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+  const openEditor = (slide = null) => context.setIsOpenFullScreenPanel({ open: true, model: slide ? "Edit Home Slide" : "Add Home Slide", slide });
+  const remove = async () => {
+    setDeleting(deleteTarget._id);
+    const result = await deleteData(`/api/home-sliders/${deleteTarget._id}`);
+    if (result?.success) {
+      setSlides((items) => items.filter((item) => item._id !== deleteTarget._id));
+      alertBox("success", "Home slider deleted successfully.");
+    } else alertBox("error", result?.message || "Unable to delete the home slider.");
+    setDeleting(null);
+    setDeleteTarget(null);
   };
+  const safePage = Math.min(page, Math.max(0, Math.ceil(slides.length / rowsPerPage) - 1));
+  const rows = slides.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeCatFilter = (event) => {
-    setcategoryFilterVal(event.target.value);
-  };
-
-  const columns = [
-    { id: "image", label: "IMAGE", minWidth: 250 },
-    { id: "action", label: "Action", minWidth: 100 },
-  ];
-  return (
-    <>
-      <div className="flex items-center justify-between px-2 py-0 mt-3">
-        <h2 className="text-[20px] font-[600]">
-          Home Slider Banners{" "}
-          <span className="font-[400] text-[12px]">(Material Ui table)</span>
-        </h2>
-
-        <div className="col w-[25%] ml-auto flex items-center justify-end gap-3">
-          <Button className="btn-blue !bg-green-500">Export</Button>
-          <Button
-            className="btn-blue !text-white"
-            onClick={() =>
-              context.setIsOpenFullScreenPanel({
-                open: true,
-                model: "Add Home Slide",
-              })
-            }
-          >
-            Add Home Slide
-          </Button>
-        </div>
-      </div>
-      <div className="card my-4 pt-5 shadow-md rounded-lg border border-gray-200 bg-white">
-        <TableContainer sx={{ maxHeight: 440 }}>
-          <Table stickyHeader aria-label="sticky table">
-            <TableHead>
-              <TableRow>
-                <TableCell width={60} className="bg-[#ccc]">
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                {columns.map((column) => (
-                  <TableCell
-                    width={column.minWidth}
-                    key={column.id}
-                    align={column.align}
-                  >
-                    {column.label}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              <TableRow>
-                <TableCell>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell width={300}>
-                  <div className="flex items-center gap-4 w-[300px]">
-                    <div className="img w-[full] h-auto rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="/banner 3.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell width={100}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          rowsPerPageOptions={[10, 25, 100]}
-          component="div"
-          count={10}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
-
-        <div className="flex items-center justify-end pt-5 pb-5 px-4">
-          <Pagination count={10} color="primary" />
-        </div>
-      </div>
-    </>
-  );
+  return <>
+    <div className="flex items-center justify-between px-2 mt-3"><h2 className="text-[20px] font-[600]">Home Slider Banners <span className="font-normal text-xs">({slides.length} slides)</span></h2><Button className="btn-blue !text-white" onClick={() => openEditor()}>Add Home Slide</Button></div>
+    <div className="card my-4 pt-5 shadow-md rounded-lg border bg-white"><TableContainer sx={{ maxHeight: 600 }}><Table stickyHeader><TableHead><TableRow><TableCell>IMAGE</TableCell><TableCell>TITLE / LINK</TableCell><TableCell width={90}>ORDER</TableCell><TableCell width={100}>STATUS</TableCell><TableCell width={130}>ACTION</TableCell></TableRow></TableHead><TableBody>
+      {loading ? <TableRow><TableCell colSpan={5} align="center" sx={{ py: 7 }}><CircularProgress /></TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={5} align="center" sx={{ py: 7 }}>No home sliders found.</TableCell></TableRow> : rows.map((slide) => <TableRow hover key={slide._id}><TableCell><div className="w-[240px] h-[90px] rounded-md overflow-hidden bg-gray-100"><img src={slide.image} alt={slide.title || "Home slider"} className="w-full h-full object-cover" /></div></TableCell><TableCell><div className="font-medium">{slide.title || "Untitled banner"}</div><div className="text-xs text-gray-500 max-w-[360px] truncate">{slide.link || "No destination link"}</div></TableCell><TableCell>{slide.order}</TableCell><TableCell><Chip size="small" color={slide.active ? "success" : "default"} label={slide.active ? "Active" : "Hidden"} /></TableCell><TableCell><div className="flex gap-2"><Button aria-label="Edit slider" onClick={() => openEditor(slide)} className="!w-[35px] !h-[35px] !min-w-[35px] !rounded-full !bg-gray-100"><AiOutlineEdit className="text-[20px]" /></Button><Button aria-label="Delete slider" disabled={deleting === slide._id} onClick={() => setDeleteTarget(slide)} className="!w-[35px] !h-[35px] !min-w-[35px] !rounded-full !bg-red-50 !text-red-600">{deleting === slide._id ? <CircularProgress size={18} /> : <GoTrash className="text-[19px]" />}</Button></div></TableCell></TableRow>)}
+    </TableBody></Table></TableContainer><TablePagination rowsPerPageOptions={[5, 10, 25]} component="div" count={slides.length} rowsPerPage={rowsPerPage} page={safePage} onPageChange={(_, value) => setPage(value)} onRowsPerPageChange={(event) => { setRowsPerPage(Number(event.target.value)); setPage(0); }} /></div>
+    <ConfirmDialog open={Boolean(deleteTarget)} title="Delete home slider?" message={`You are about to delete “${deleteTarget?.title || "this banner"}”. This action cannot be undone.`} loading={Boolean(deleting)} onClose={() => setDeleteTarget(null)} onConfirm={remove} />
+  </>;
 };
 
 export default HomeSliderBanners;

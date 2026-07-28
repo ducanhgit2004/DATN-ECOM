@@ -1,5 +1,5 @@
-import React, { useContext, useState } from "react";
-import { Link } from "react-router-dom";
+import { useContext, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Search from "../Search";
 import Navigation from "./Navigation";
 import Badge from "@mui/material/Badge";
@@ -18,7 +18,7 @@ import { IoIosLogOut } from "react-icons/io";
 
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
-import Divider from "@mui/material/Divider";
+import { fetchDataFromApi } from "../../utils/api";
 
 const StyledBadge = styled(Badge)(({ theme }) => ({
   "& .MuiBadge-badge": {
@@ -40,6 +40,34 @@ const Header = () => {
   };
 
   const context = useContext(MyContext);
+  const cartCount = (context?.cartItems || []).reduce(
+    (total, item) => total + Number(item?.quantity || 0),
+    0,
+  );
+  const displayedWishlistCount = context?.isLogin
+    ? (context?.myListItems || []).length
+    : 0;
+
+  const history = useNavigate();
+
+  const logout = () => {
+    setAnchorEl(null);
+
+    fetchDataFromApi("/api/user/logout")
+      .then(() => {
+        localStorage.removeItem("accesstoken");
+        localStorage.removeItem("refreshToken");
+        context.setUserData(null);
+        context.setIsLogin(false);
+        history("/");
+      })
+      .catch(() => {
+        localStorage.removeItem("accesstoken");
+        localStorage.removeItem("refreshToken");
+        context.setUserData(null);
+        context.setIsLogin(false);
+      });
+  };
 
   return (
     <header className="bg-white">
@@ -110,23 +138,34 @@ const Header = () => {
                 </li>
               ) : (
                 <>
-                  <Button
+                  <div
                     className="text-[#000] myAccountWrap flex items-center gap-3 cursor-pointer"
                     onClick={handleClick}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        handleClick(event);
+                      }
+                    }}
                   >
-                    <Button className="!w-[40px] !h-[40px] !min-w-[40px] !rounded-full !bg-[#f1f1f1]">
+                    <Button
+                      type="button"
+                      className="!w-[40px] !h-[40px] !min-w-[40px] !rounded-full !bg-[#f1f1f1]"
+                    >
                       <FaRegUser className="text-[18px] text-[rgba(0,0,0,0.7)]" />
                     </Button>
 
                     <div className="info flex flex-col">
-                      <h4 className="leading-3 font-[14px] text-[rgba(0,0,0,0.6)] font-[500] capitalize text-left justify-start">
-                        Mr Tram Tinh
+                      <h4 className="leading-3 font-[14px] text-[rgba(0,0,0,0.6)] font-[500] capitalize text-left justify-start pb-1">
+                        {context?.userData?.name}
                       </h4>
                       <span className="text-[13px] text-[rgba(0,0,0,0.6)] font-[400] capitalize text-left justify-start">
-                        nducanh69@gmail.com
+                        {context?.userData?.email}
                       </span>
                     </div>
-                  </Button>
+                  </div>
 
                   <Menu
                     anchorEl={anchorEl}
@@ -192,10 +231,7 @@ const Header = () => {
                         <span className="text-[14px]"> My List </span>
                       </MenuItem>
                     </Link>
-                    <MenuItem
-                      onClick={handleClose}
-                      className="flex gap-2 !py-2"
-                    >
+                    <MenuItem onClick={logout} className="flex gap-2 !py-2">
                       <IoIosLogOut className="text-[18px]" />
                       <span className="text-[14px]"> Log Out </span>
                     </MenuItem>
@@ -205,21 +241,21 @@ const Header = () => {
 
               <li>
                 <Tooltip title="Compare">
-                  <IconButton aria-label="cart">
-                    <StyledBadge badgeContent={4} color="secondary">
-                      <IoGitCompareOutline size={24} />
-                    </StyledBadge>
+                  <IconButton aria-label="compare">
+                    <IoGitCompareOutline size={24} />
                   </IconButton>
                 </Tooltip>
               </li>
 
               <li>
                 <Tooltip title="Wishlist">
-                  <IconButton aria-label="cart">
-                    <StyledBadge badgeContent={4} color="secondary">
-                      <FaRegHeart size={24} />
-                    </StyledBadge>
-                  </IconButton>
+                  <Link to="/my-list">
+                    <IconButton aria-label="wishlist">
+                      <StyledBadge badgeContent={displayedWishlistCount} color="secondary">
+                        <FaRegHeart size={24} />
+                      </StyledBadge>
+                    </IconButton>
+                  </Link>
                 </Tooltip>
               </li>
 
@@ -229,7 +265,7 @@ const Header = () => {
                     aria-label="cart"
                     onClick={() => context.setOpenCartPanel(true)}
                   >
-                    <StyledBadge badgeContent={4} color="secondary">
+                    <StyledBadge badgeContent={cartCount} color="secondary">
                       <MdOutlineShoppingCart size={24} />
                     </StyledBadge>
                   </IconButton>

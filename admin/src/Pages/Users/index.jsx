@@ -1,384 +1,118 @@
-import React, { useContext, useState } from "react";
-import { Button } from "@mui/material";
-import { IoMdAdd } from "react-icons/io";
-import Checkbox from "@mui/material/Checkbox";
-import { Link } from "react-router-dom";
-import Progess from "../../components/ProgessBar";
-
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TablePagination from "@mui/material/TablePagination";
-import TableRow from "@mui/material/TableRow";
-import Select from "@mui/material/Select";
-import Pagination from "@mui/material/Pagination";
-import SearchBox from "../../components/SearchBox";
-import { MyContext } from "../../App";
-import { MdOutlineMarkEmailRead } from "react-icons/md";
-import { MdLocalPhone } from "react-icons/md";
+import { useCallback, useContext, useEffect, useState } from "react";
+import { Button, CircularProgress, MenuItem, Pagination, Select } from "@mui/material";
+import { IoRefreshOutline, IoSearchOutline } from "react-icons/io5";
+import { MdLocalPhone, MdOutlineMarkEmailRead, MdVerified } from "react-icons/md";
 import { SlCalender } from "react-icons/sl";
+import { MyContext } from "../../App";
+import { editData, fetchDataFromApi } from "../../utils/api";
 
-const label = { slotProps: { input: { "aria-label": "Checkbox demo" } } };
+const statusStyles = {
+  Active: "bg-emerald-100 text-emerald-700",
+  Inactive: "bg-gray-100 text-gray-600",
+  Suspended: "bg-red-100 text-red-700",
+};
+
+const formatDate = (value) => value
+  ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value))
+  : "—";
 
 const Users = () => {
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-
-  const id = "category-select";
-
   const context = useContext(MyContext);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
+  const limit = 10;
 
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (search) params.set("search", search);
+    if (status) params.set("status", status);
+    const result = await fetchDataFromApi(`/api/user/admin/users?${params}`);
+    if (result?.success) {
+      setUsers(Array.isArray(result.data) ? result.data : []);
+      setPagination(result.pagination || { total: 0, totalPages: 1 });
+    } else context.alertBox("error", result?.message || "Users could not be loaded.");
+    setLoading(false);
+  }, [page, search, status, context]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(loadUsers, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadUsers]);
+
+  const updateStatus = async (user, nextStatus) => {
+    if (user.status === nextStatus) return;
+    setUpdatingId(user._id);
+    const result = await editData(`/api/user/admin/users/${user._id}/status`, { status: nextStatus });
+    if (result?.success) {
+      setUsers((items) => items.map((item) => item._id === user._id ? result.data : item));
+      context.alertBox("success", result.message);
+    } else context.alertBox("error", result?.message || "User status could not be updated.");
+    setUpdatingId("");
   };
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+  const applySearch = (event) => {
+    event.preventDefault();
+    setPage(1);
+    setSearch(searchInput.trim());
   };
 
-  const columns = [
-    { id: "userIMG", label: "USER IMAGE", minWidth: 80 },
-    { id: "userName", label: "USER NAME", minWidth: 100 },
-    {
-      id: "userEmail",
-      label: "SUB EMAIL",
-      minWidth: 150,
-    },
-    {
-      id: "userPh",
-      label: "USER PHONE NO",
-      minWidth: 80,
-    },
-    {
-      id: "createdDate",
-      label: "CREATED",
-      minWidth: 80,
-    },
-  ];
   return (
-    <>
-      <div className="card my-4 pt-5 shadow-md rounded-lg border border-gray-200 bg-white">
-        <div className="flex items-center w-full pl-5 justify-between pr-5">
-          <div className="col w-[40%]">
-            <h2 className="text-[20px] font-[600]">
-              Users List{" "}
-              <span className="font-[400] text-[12px]">
-                (Material Ui table)
-              </span>
-            </h2>
-          </div>
-
-          <div className="col w-[40%] ml-auto">
-            <SearchBox />
-          </div>
+    <div className="my-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex flex-col justify-between gap-4 border-b border-gray-100 p-5 lg:flex-row lg:items-center">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Users Listing</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {pagination.total} customer{pagination.total === 1 ? "" : "s"} in total
+          </p>
         </div>
-
-        <br />
-
-        <TableContainer sx={{ maxHeight: 440 }}>
-          <Table stickyHeader aria-label="sticky table">
-            <TableHead>
-              <TableRow>
-                <TableCell className="bg-[#ccc]">
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                {columns.map((column) => (
-                  <TableCell
-                    key={column.id}
-                    align={column.align}
-                    style={{ minWidth: column.minWidth }}
-                  >
-                    {column.label}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[100px]">
-                    <div className="img w-[45px] h-[45px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="https://mui.com/static/images/avatar/1.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Mr Tram Tinh
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdOutlineMarkEmailRead />
-                    mrtramtinh@gmail.com
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdLocalPhone />
-                    13245678955
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <SlCalender />
-                    14-6-2026
-                  </span>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[100px]">
-                    <div className="img w-[45px] h-[45px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="https://mui.com/static/images/avatar/1.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Mr Tram Tinh
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdOutlineMarkEmailRead />
-                    mrtramtinh@gmail.com
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdLocalPhone />
-                    13245678955
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <SlCalender />
-                    14-6-2026
-                  </span>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[100px]">
-                    <div className="img w-[45px] h-[45px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="https://mui.com/static/images/avatar/1.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Mr Tram Tinh
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdOutlineMarkEmailRead />
-                    mrtramtinh@gmail.com
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdLocalPhone />
-                    13245678955
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <SlCalender />
-                    14-6-2026
-                  </span>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[100px]">
-                    <div className="img w-[45px] h-[45px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="https://mui.com/static/images/avatar/1.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Mr Tram Tinh
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdOutlineMarkEmailRead />
-                    mrtramtinh@gmail.com
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdLocalPhone />
-                    13245678955
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <SlCalender />
-                    14-6-2026
-                  </span>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[100px]">
-                    <div className="img w-[45px] h-[45px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="https://mui.com/static/images/avatar/1.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Mr Tram Tinh
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdOutlineMarkEmailRead />
-                    mrtramtinh@gmail.com
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdLocalPhone />
-                    13245678955
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <SlCalender />
-                    14-6-2026
-                  </span>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[100px]">
-                    <div className="img w-[45px] h-[45px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="https://mui.com/static/images/avatar/1.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Mr Tram Tinh
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdOutlineMarkEmailRead />
-                    mrtramtinh@gmail.com
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <MdLocalPhone />
-                    13245678955
-                  </span>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <span className="flex items-center gap-2">
-                    <SlCalender />
-                    14-6-2026
-                  </span>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          rowsPerPageOptions={[10, 25, 100]}
-          component="div"
-          count={10}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
-
-        <div className="flex items-center justify-end pt-5 pb-5 px-4">
-          <Pagination count={10} color="primary" />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Select size="small" value={status} displayEmpty onChange={(event) => { setStatus(event.target.value); setPage(1); }}>
+            <MenuItem value="">All statuses</MenuItem>
+            <MenuItem value="Active">Active</MenuItem>
+            <MenuItem value="Inactive">Inactive</MenuItem>
+            <MenuItem value="Suspended">Suspended</MenuItem>
+          </Select>
+          <form onSubmit={applySearch} className="relative min-w-[300px]">
+            <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search name, email or phone..." className="h-10 w-full rounded-lg border border-gray-200 pl-10 pr-3 text-sm outline-none focus:border-blue-500" />
+          </form>
+          <Button onClick={loadUsers} disabled={loading} className="!min-w-10 !border !border-gray-200 !text-gray-600" aria-label="Refresh users">
+            <IoRefreshOutline className={loading ? "animate-spin" : ""} />
+          </Button>
         </div>
       </div>
-    </>
+
+      {loading ? <div className="flex min-h-[350px] items-center justify-center"><CircularProgress size={34} /></div> :
+        users.length === 0 ? <div className="px-5 py-16 text-center text-gray-500">No users match the selected filters.</div> :
+        <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left text-sm">
+          <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr>
+            <th className="px-5 py-4">User</th><th className="px-4 py-4">Contact</th><th className="px-4 py-4">Email verification</th><th className="px-4 py-4">Provider</th><th className="px-4 py-4">Joined</th><th className="px-4 py-4">Last login</th><th className="min-w-[170px] px-4 py-4">Status</th>
+          </tr></thead>
+          <tbody className="divide-y divide-gray-100">{users.map((user) => <tr key={user._id} className="hover:bg-gray-50/70">
+            <td className="px-5 py-4"><div className="flex items-center gap-3"><img src={user.avatar || "/Sample_User_Icon.png"} alt={user.name} className="h-11 w-11 rounded-full border border-gray-100 object-cover" /><div><p className="font-semibold text-gray-900">{user.name}</p><p className="mt-1 text-xs text-gray-400">{user._id}</p></div></div></td>
+            <td className="px-4 py-4"><p className="flex items-center gap-2 text-gray-700"><MdOutlineMarkEmailRead />{user.email}</p><p className="mt-2 flex items-center gap-2 text-gray-500"><MdLocalPhone />{user.mobile || "No phone"}</p></td>
+            <td className="px-4 py-4">{user.verify_email ? <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700"><MdVerified /> Verified</span> : <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Unverified</span>}</td>
+            <td className="px-4 py-4 capitalize text-gray-600">{user.authProvider || "local"}</td>
+            <td className="px-4 py-4"><span className="flex items-center gap-2 whitespace-nowrap text-gray-500"><SlCalender />{formatDate(user.createdAt)}</span></td>
+            <td className="px-4 py-4 whitespace-nowrap text-gray-500">{formatDate(user.last_login_date)}</td>
+            <td className="px-4 py-4"><Select size="small" fullWidth value={user.status || "Active"} disabled={updatingId === user._id} onChange={(event) => updateStatus(user, event.target.value)} className={statusStyles[user.status] || statusStyles.Active}>
+              <MenuItem value="Active">Active</MenuItem><MenuItem value="Inactive">Inactive</MenuItem><MenuItem value="Suspended">Suspended</MenuItem>
+            </Select></td>
+          </tr>)}</tbody>
+        </table></div>}
+
+      {!loading && pagination.total > 0 && <div className="flex flex-col items-center justify-between gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row">
+        <p className="text-sm text-gray-500">Showing {(page - 1) * limit + 1}–{Math.min(page * limit, pagination.total)} of {pagination.total} users</p>
+        <Pagination page={page} count={Math.max(1, pagination.totalPages)} color="primary" shape="rounded" onChange={(_, value) => setPage(value)} />
+      </div>}
+    </div>
   );
 };
 

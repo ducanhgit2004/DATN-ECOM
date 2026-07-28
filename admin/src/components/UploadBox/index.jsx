@@ -1,4 +1,3 @@
-import React from "react";
 import { FaRegImages } from "react-icons/fa";
 
 const UploadBox = (props) => {
@@ -14,6 +13,8 @@ const UploadBox = (props) => {
       <input
         type="file"
         multiple={props.multiple ?? false}
+        accept={props.accept}
+        onChange={props.onChange}
         className="absolute top-0 left-0 w-full h-full opacity-0"
       />
     </div>

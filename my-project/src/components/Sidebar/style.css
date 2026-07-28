@@ -23,3 +23,5 @@
 .priceSlider .MuiSlider-valueLabel{
     background: #ff5252 !important;
 }
+
+.productFilterOption .MuiFormControlLabel-label{width: 100%;}

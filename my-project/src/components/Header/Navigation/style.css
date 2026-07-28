@@ -2,6 +2,10 @@
   text-transform: capitalize !important;
 }
 
+.nav > li > a > button {
+  font-weight: 500 !important;
+}
+
 /* submenu cấp 1 và cấp 2 đều ẩn */
 .nav .submenu {
   visibility: hidden !important;

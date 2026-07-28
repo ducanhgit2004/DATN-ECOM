@@ -1,94 +1,39 @@
-import React, {useContext} from 'react'
-import '../ProductItem/style.css'
-import { Link } from 'react-router-dom'
-import Rating from '@mui/material/Rating'
-import Button from '@mui/material/Button'
+import { useContext } from "react";
+import { Link } from "react-router-dom";
+import Rating from "@mui/material/Rating";
+import Button from "@mui/material/Button";
 import { FaRegHeart } from "react-icons/fa";
-import { IoIosGitCompare } from "react-icons/io";
 import { MdZoomOutMap } from "react-icons/md";
-import { MdOutlineShoppingCart } from "react-icons/md";
-import { MyContext } from '../../App'
+import { MyContext } from "../../App";
 
+const money = (value) => new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+}).format(Number(value) || 0);
 
-const ProductItem = () => {
-
-  
-  const context = useContext(MyContext);
-  return (
-    <div className="productItem w-full shadow-lg overflow-hidden rounded-md border
-     border-[rgba(0,0,0,0.1)] flex items-center">
-      
-      <div className="group imgWrapper w-[25%] h-[220px] overflow-hidden rounded-md relative ml-4">
-        <Link to="/">
-          <div className="img h-[220px] overflow-hidden">
-              <img 
-              src="/vay1.PNG"
-              className="w-full"/>
-
-               <img 
-              src="https://static.juno.vn/cmsimage/public/nau_jnvng023_6_20260331165636.jpeg"
-              className="w-full transition-all duration-700 absolute top-0 left-0 opacity-0 
-              group-hover:opacity-100 group-hover:scale-105"/>
-              
-          </div>
-        </Link>
-        <span className="discount flex items-center absolute top-[10px] left-[10px] z-50
-        bg-[#ff5252] text-white rounded-lg p-1 text-[12px] font-[500]">10%</span>
-
-        <div className="actions absolute top-[-200px] right-[15px] z-50 flex items-center 
-        gap-2 flex-col w-[50px] transition-all duration-300 group-hover:top-[15px] opacity-0 group-hover:opacity-100">          
-            <Button className="!w-[35px] !h-[35px] !min-w-[35px] !rounded-full !bg-white text-black
-            hover:!bg-[#ff5252] hover:text-white group" onClick={()=>context.
-              setOpenProductDetailsModal(true)
-            }>
-              <MdZoomOutMap className='text-[18px] !text-black group-hover:text-white hover:!text-white'/>
-            </Button>
-
-          <Button className="!w-[35px] !h-[35px] !min-w-[35px] !rounded-full !bg-white text-black
-          hover:!bg-[#ff5252] hover:text-white group ">
-            <IoIosGitCompare className='text-[18px] !text-black group-hover:text-white hover:!text-white'/>
-          </Button>
-
-          <Button className="!w-[35px] !h-[35px] !min-w-[35px] !rounded-full !bg-white text-black
-          hover:!bg-[#ff5252] hover:text-white group">
-            <FaRegHeart className='text-[18px] !text-black group-hover:text-white hover:!text-white'/>
-          </Button>
-        </div>
-
-      </div>
-        
-      <div className="info p-3 rounded-b-lg py-5 px-8 w-[75%]">
-        <h6 className='text-[15px] !font-[400]'>
-          <Link to="/" className='link transition-all'>Áo phông</Link>
-        </h6>
-
-        <h3 className='text-[18px] title mt-3 mb-3 font-[500] mb-1 text-[#000]'>
-          <Link to="/" className='link transition-all'>
-            Áo thun ngắn tay có cổ phong cách thể thao
-          </Link>
-        </h3>
-
-        <p className='text-[14px] mb-3'>Được làm từ sợi tre cao cấp, phù hợp với đủ mọi loại thời 
-          tiết hạn chế bai dão
-        </p>
-
-        <Rating name="size-small" defaultValue={2} size="small" readOnly />
-
-          <div className="flex items-center gap-4">
-            <span className="oldPrice line-through text-gray-500 text-[15px] font-[500]">$58.00</span>
-            <span className="price text-[#ff5252] font-[600] text-[15px]">$30.00</span>
-          </div>
-
-        <div className='mt-3'>
-        <Button className="btn-org flex gap-2 ">
-          <MdOutlineShoppingCart className="text-[20px]"/>
-          Add to Cart
-        </Button>
-        </div>
-      </div> 
-      
+const ProductItemListView = ({ product }) => {
+  const { openProductPreview, addToMyList, myListItems } = useContext(MyContext);
+  if (!product) return null;
+  const images = product.images?.length ? product.images : ["/placeholder-image.png"];
+  return <article className="group relative flex flex-col sm:flex-row w-full min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow">
+    <div className="relative w-full sm:w-[260px] lg:w-[300px] xl:w-[320px] shrink-0 h-[280px] sm:h-[300px] overflow-hidden bg-gray-50">
+      <Link to={`/product/${product._id}`} className="block w-full h-full">
+        <img src={images[0]} alt={product.name} className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105" />
+        {images[1] && <img src={images[1]} alt="" className="absolute inset-0 w-full h-full object-cover object-top opacity-0 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105" />}
+      </Link>
+      {Number(product.discount) > 0 && <span className="absolute top-3 left-3 z-10 bg-[#ff5252] text-white rounded-lg px-2 py-1 text-[12px] font-semibold">{product.discount}%</span>}
     </div>
-  )
-}
 
-export default ProductItem
+    <div className="flex flex-1 min-w-0 flex-col justify-center p-5 md:p-7 lg:p-8">
+      <span className="text-[13px] font-[500] text-gray-500">{product.catName || product.category?.name || "Product"}</span>
+      <h3 className="mt-1 text-[20px] md:text-[22px] font-[600] text-gray-900"><Link to={`/product/${product._id}`} className="hover:text-[#ff5252] transition-colors">{product.name}</Link></h3>
+      {product.brand && <span className="mt-1 text-sm text-gray-500">Brand: <strong className="font-medium text-gray-700">{product.brand}</strong></span>}
+      <div className="mt-3 flex items-center gap-2"><Rating value={Number(product.rating) || 0} precision={0.5} size="small" readOnly /><span className="text-xs text-gray-500">({Number(product.rating) || 0})</span></div>
+      {product.description && <p className="mt-4 max-w-[720px] text-[14px] leading-6 text-gray-600 line-clamp-3">{product.description}</p>}
+      <div className="mt-5 flex flex-wrap items-center gap-4">{Number(product.oldPrice) > Number(product.price) && <span className="line-through text-gray-400 text-[16px]">{money(product.oldPrice)}</span>}<span className="text-[#ff5252] font-[700] text-[20px]">{money(product.price)}</span><span className={`text-xs font-semibold rounded-full px-3 py-1 ${Number(product.countInStock) > 0 ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>{Number(product.countInStock) > 0 ? "In stock" : "Out of stock"}</span></div>
+      <div className="mt-6 flex items-center gap-3"><Link to={`/product/${product._id}`} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#ff5252] px-5 text-sm font-semibold text-white hover:bg-[#e74848] transition">View Details</Link><Button aria-label="Quick view" title="Quick view" className="!min-w-[40px] !w-[40px] !h-[40px] !rounded-lg !border !border-gray-200 !text-gray-700" onClick={() => openProductPreview(product)}><MdZoomOutMap /></Button><Button aria-label="Add to wishlist" title="Add to wishlist" disabled={myListItems.some((item) => item.productId === product._id)} className="!min-w-[40px] !w-[40px] !h-[40px] !rounded-lg !border !border-gray-200 !text-gray-700" onClick={() => addToMyList(product)}><FaRegHeart /></Button></div>
+    </div>
+  </article>;
+};
+
+export default ProductItemListView;

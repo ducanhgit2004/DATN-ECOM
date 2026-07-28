@@ -1,1021 +1,373 @@
-import React, { useContext, useState } from "react";
-import { Button } from "@mui/material";
-import { IoMdAdd } from "react-icons/io";
-import Checkbox from "@mui/material/Checkbox";
-import { Link } from "react-router-dom";
-import Progess from "../../components/ProgessBar";
+import { useContext, useEffect, useMemo, useState } from "react";
+import {
+  Button,
+  Checkbox,
+  MenuItem,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TablePagination,
+  TableRow,
+} from "@mui/material";
 import { AiOutlineEdit } from "react-icons/ai";
-import { FaRegEye } from "react-icons/fa";
 import { GoTrash } from "react-icons/go";
-
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TablePagination from "@mui/material/TablePagination";
-import TableRow from "@mui/material/TableRow";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
-import Pagination from "@mui/material/Pagination";
-import SearchBox from "../../components/SearchBox";
+import { IoMdAdd } from "react-icons/io";
+import { FaRegEye } from "react-icons/fa";
 import { MyContext } from "../../App";
+import { deleteData, fetchDataFromApi } from "../../utils/api";
+import ConfirmDialog from "../../components/ConfirmDialog";
 
-const label = { slotProps: { input: { "aria-label": "Checkbox demo" } } };
-
-const Products = () => {
+const Products = ({ seller = null }) => {
+  const context = useContext(MyContext);
+  const { alertBox, catData, productRefreshKey, setIsOpenFullScreenPanel } =
+    context;
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [categoryFilterVal, setcategoryFilterVal] = useState("");
-  const id = "category-select";
+  const [category, setCategory] = useState("");
+  const [subCategory, setSubCategory] = useState("");
+  const [thirdCategory, setThirdCategory] = useState("");
+  const [search, setSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState(null);
 
-  const context = useContext(MyContext);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      const result = await fetchDataFromApi(
+        seller?._id
+          ? `/api/user/admin/sellers/${seller._id}/products`
+          : "/api/product/getAllProducts?perPage=10000&page=1",
+      );
+      if (!active) return;
+      if (result?.success)
+        setProducts(
+          seller?._id ? result.data?.products || [] : result.products || [],
+        );
+      else
+        alertBox("error", result?.message || "Products could not be loaded.");
+      setLoading(false);
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [alertBox, productRefreshKey, seller?._id]);
 
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+  const selectedCategory = useMemo(
+    () => catData?.find((item) => item._id === category),
+    [catData, category],
+  );
+  const allSubCategories = useMemo(
+    () => (catData || []).flatMap((parent) =>
+      (parent.children || []).map((item) => ({ ...item, parentCategoryId: parent._id })),
+    ),
+    [catData],
+  );
+  const subCategories = category ? selectedCategory?.children || [] : allSubCategories;
+  const selectedSubCategory = useMemo(
+    () => allSubCategories.find((item) => item._id === subCategory),
+    [allSubCategories, subCategory],
+  );
+  const allThirdCategories = useMemo(
+    () => allSubCategories.flatMap((parent) =>
+      (parent.children || []).map((item) => ({
+        ...item,
+        parentSubCategoryId: parent._id,
+        parentCategoryId: parent.parentCategoryId,
+      })),
+    ),
+    [allSubCategories],
+  );
+  const thirdCategories = subCategory
+    ? selectedSubCategory?.children || []
+    : category
+      ? (selectedCategory?.children || []).flatMap((item) => item.children || [])
+      : allThirdCategories;
+
+  const filtered = useMemo(
+    () =>
+      products.filter((product) => {
+        const term = search.trim().toLowerCase();
+        return (
+          (!category || product.catId === category) &&
+          (!subCategory || product.subCatId === subCategory) &&
+          (!thirdCategory || product.thirdsubCatId === thirdCategory) &&
+          (!term ||
+            product.name?.toLowerCase().includes(term) ||
+            product.brand?.toLowerCase().includes(term))
+        );
+      }),
+    [products, category, subCategory, thirdCategory, search],
+  );
+
+  const removeProduct = async (product) => {
+    setBulkDeleting(true);
+    const result = await deleteData(`/api/product/${product._id}`);
+    if (result?.error || !result?.success) {
+      alertBox("error", result?.message || "Product could not be deleted.");
+      setBulkDeleting(false);
+      return;
+    }
+    alertBox("success", "Product deleted successfully.");
+    setProducts((items) => items.filter((item) => item._id !== product._id));
+    setSelectedIds((ids) => ids.filter((id) => id !== product._id));
+    setBulkDeleting(false);
+    setDeleteDialog(null);
   };
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+  const openForm = (product) =>
+    setIsOpenFullScreenPanel({
+      open: true,
+      model: product ? "Edit Product" : "Add Product",
+      product,
+    });
+  const viewProduct = (product) => setIsOpenFullScreenPanel({ open: true, model: "Product Details", product });
+  const visible = filtered.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+  const visibleIds = visible.map((item) => item._id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.includes(id)) && !allVisibleSelected;
+  const toggleOne = (id) => setSelectedIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
+  const toggleVisible = () => setSelectedIds((ids) => allVisibleSelected ? ids.filter((id) => !visibleIds.includes(id)) : [...new Set([...ids, ...visibleIds])]);
+  const deleteSelected = async () => {
+    if (!selectedIds.length) return;
+    setBulkDeleting(true);
+    const results = await Promise.all(selectedIds.map((id) => deleteData(`/api/product/${id}`)));
+    const deletedIds = selectedIds.filter((_, index) => results[index]?.success);
+    setProducts((items) => items.filter((item) => !deletedIds.includes(item._id)));
+    setSelectedIds((ids) => ids.filter((id) => !deletedIds.includes(id)));
+    setBulkDeleting(false);
+    if (deletedIds.length) alertBox("success", `${deletedIds.length} products deleted successfully.`);
+    if (deletedIds.length !== results.length) alertBox("error", `${results.length - deletedIds.length} products could not be deleted.`);
+    setDeleteDialog(null);
   };
 
-  const handleChangeCatFilter = (event) => {
-    setcategoryFilterVal(event.target.value);
-  };
-
-  const columns = [
-    { id: "product", label: "PRODUCT", minWidth: 150 },
-    { id: "category", label: "CATEGORY", minWidth: 100 },
-    {
-      id: "subcategory",
-      label: "SUB CATEGORY",
-      minWidth: 150,
-    },
-    {
-      id: "price",
-      label: "PRICE",
-      minWidth: 80,
-    },
-    {
-      id: "sales",
-      label: "SALES",
-      minWidth: 80,
-    },
-    {
-      id: "action",
-      label: "ACTION",
-      minWidth: 120,
-    },
-  ];
   return (
     <>
-      <div className="flex items-center justify-between px-2 py-0 mt-3">
+      <div className="flex items-center justify-between px-2 mt-3">
         <h2 className="text-[20px] font-[600]">
-          Products{" "}
-          <span className="font-[400] text-[12px]">(Material Ui table)</span>
+          {seller ? `${seller.storeName} products` : "Products"}{" "}
+          <span className="font-[400] text-[12px]">({filtered.length})</span>
         </h2>
-
-        <div className="col w-[25%] ml-auto flex items-center justify-end gap-3">
-          <Button className="btn-blue !bg-green-500">Export</Button>
-          <Button
-            className="btn-blue !text-white"
-            onClick={() =>
-              context.setIsOpenFullScreenPanel({
-                open: true,
-                model: "Add Product",
-              })
-            }
-          >
-            Add Product
-          </Button>
-        </div>
+        <div className="flex gap-2">{selectedIds.length > 0 && <Button color="error" variant="contained" disabled={bulkDeleting} onClick={() => setDeleteDialog({ type: "bulk" })}>{bulkDeleting ? "Deleting..." : `Delete Selected (${selectedIds.length})`}</Button>}{!seller && <Button className="btn-blue !text-white" onClick={() => openForm()}>
+          <IoMdAdd className="mr-1" />
+          Add Product
+        </Button>}</div>
       </div>
       <div className="card my-4 pt-5 shadow-md rounded-lg border border-gray-200 bg-white">
-        <div className="flex items-center w-full pl-5 justify-between pr-5">
-          <div className="col w-[25%]">
-            <h4 className="font-[600] text-[13px] mb-2">Category By</h4>
+        <div className="flex flex-wrap items-end gap-4 px-5 pb-5">
+          <div className="flex min-w-[220px] flex-col gap-1">
+            <label className="text-[13px] font-[600] text-gray-700">Category</label>
             <Select
-              className="w-[45%]"
-              aria-describedby={`${id}-helper-text`}
-              labelId={`${id}-label`}
-              id={id}
-              value={categoryFilterVal}
-              label="Category"
-              onChange={handleChangeCatFilter}
-            >
-              <MenuItem value="">
-                <em>None</em>
+            size="small"
+            className="w-full"
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setSubCategory("");
+              setThirdCategory("");
+              setPage(0);
+            }}
+          >
+            <MenuItem value="">All Categories</MenuItem>
+            {catData?.map((cat) => (
+              <MenuItem key={cat._id} value={cat._id}>
+                {cat.name}
               </MenuItem>
-              <MenuItem value={10}>Men</MenuItem>
-              <MenuItem value={20}>Women</MenuItem>
-              <MenuItem value={30}>Kids</MenuItem>
-            </Select>
+            ))}
+          </Select>
           </div>
-
-          <div className="col w-[25%] ml-auto">
-            <SearchBox />
+          <div className="flex min-w-[220px] flex-col gap-1">
+            <label className="text-[13px] font-[600] text-gray-700">Subcategory</label>
+            <Select
+            size="small"
+            className="w-full"
+            value={subCategory}
+            onChange={(e) => {
+              const nextId = e.target.value;
+              const nextSubCategory = allSubCategories.find((item) => item._id === nextId);
+              setSubCategory(nextId);
+              if (nextSubCategory) setCategory(nextSubCategory.parentCategoryId);
+              setThirdCategory("");
+              setPage(0);
+            }}
+          >
+            <MenuItem value="">All Subcategories</MenuItem>
+            {subCategories.map((item) => (
+              <MenuItem key={item._id} value={item._id}>{item.name}</MenuItem>
+            ))}
+          </Select>
+          </div>
+          <div className="flex min-w-[220px] flex-col gap-1">
+            <label className="text-[13px] font-[600] text-gray-700">Third-level Category</label>
+            <Select
+            size="small"
+            className="w-full"
+            value={thirdCategory}
+            onChange={(e) => {
+              const nextId = e.target.value;
+              const nextThirdCategory = allThirdCategories.find((item) => item._id === nextId);
+              setThirdCategory(nextId);
+              if (nextThirdCategory) {
+                setCategory(nextThirdCategory.parentCategoryId);
+                setSubCategory(nextThirdCategory.parentSubCategoryId);
+              }
+              setPage(0);
+            }}
+          >
+            <MenuItem value="">All Third-level Categories</MenuItem>
+            {thirdCategories.map((item) => (
+              <MenuItem key={item._id} value={item._id}>{item.name}</MenuItem>
+            ))}
+          </Select>
+          </div>
+          {(category || subCategory || thirdCategory) && (
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setCategory("");
+                setSubCategory("");
+                setThirdCategory("");
+                setPage(0);
+              }}
+            >
+              Clear Filters
+            </Button>
+          )}
+          <div className="flex min-w-[260px] flex-1 flex-col gap-1 xl:ml-auto">
+            <label className="text-[13px] font-[600] text-gray-700">Search Product</label>
+            <input className="h-[40px] w-full border border-gray-300 rounded-md px-3" placeholder="Search by name or brand" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
           </div>
         </div>
-
-        <br />
-
-        <TableContainer sx={{ maxHeight: 440 }}>
-          <Table stickyHeader aria-label="sticky table">
+        <TableContainer>
+          <Table>
             <TableHead>
               <TableRow>
-                <TableCell className="bg-[#ccc]">
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                {columns.map((column) => (
-                  <TableCell
-                    key={column.id}
-                    align={column.align}
-                    style={{ minWidth: column.minWidth }}
-                  >
-                    {column.label}
-                  </TableCell>
-                ))}
+                <TableCell padding="checkbox"><Checkbox checked={allVisibleSelected} indeterminate={someVisibleSelected} onChange={toggleVisible} inputProps={{ "aria-label": "Select all visible products" }} /></TableCell>
+                <TableCell>PRODUCT</TableCell>
+                <TableCell>CATEGORY</TableCell>
+                <TableCell>SUBCATEGORY</TableCell>
+                <TableCell>PRICE</TableCell>
+                <TableCell>STOCK</TableCell>
+                <TableCell>FEATURED</TableCell>
+                <TableCell>ACTIONS</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[350px]">
-                    <div className="img w-[65px] h-[65px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center">
+                    Loading products...
+                  </TableCell>
+                </TableRow>
+              ) : visible.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center">
+                    No products found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                visible.map((product) => (
+                  <TableRow key={product._id} hover>
+                    <TableCell padding="checkbox"><Checkbox checked={selectedIds.includes(product._id)} onChange={() => toggleOne(product._id)} inputProps={{ "aria-label": `Select ${product.name}` }} /></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3 min-w-[280px]">
                         <img
-                          src="vay2.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
+                          src={product.images?.[0] || "/Sample_User_Icon.png"}
+                          alt={product.name}
+                          className="w-[60px] h-[60px] rounded-md object-cover"
                         />
-                      </Link>
-                    </div>
-
-                    <div className="info w-[75%]">
-                      <h3 className="!font-[600] !text-[12px] leading-4 hover:text-[#3872fa]">
-                        <Link to="/product/45745">
-                          Áo sơ mi nữ phong cách đẳng cấp vjppro luxury | JUNO
-                          From VietNam
-                        </Link>
-                      </h3>
-                      <span className="text-[12px]">Fashion</span>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Fashion
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Women
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-start gap-1 flex-col">
-                    <span
-                      className="oldPrice line-through text-gray-500 text-[14px] 
-                    font-[500]"
-                    >
-                      $60.00
-                    </span>
-                    <span className="price text-[#3872fa] text-[14px] font-[600]">
-                      $30.00
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }} align="left">
-                  <div className="flex flex-col items-start text-[14px]">
-                    <div>
-                      <span className="font-semibold">234 </span>
-                      <span>sale</span>
-                    </div>
-
-                    <Progess value={20} type="warning" />
-                  </div>
-                </TableCell>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[350px]">
-                    <div className="img w-[65px] h-[65px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="vay2.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-
-                    <div className="info w-[75%]">
-                      <h3 className="!font-[600] !text-[12px] leading-4 hover:text-[#3872fa]">
-                        <Link to="/product/45745">
-                          Áo sơ mi nữ phong cách đẳng cấp vjppro luxury | JUNO
-                          From VietNam
-                        </Link>
-                      </h3>
-                      <span className="text-[12px]">Fashion</span>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Fashion
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Women
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-start gap-1 flex-col">
-                    <span
-                      className="oldPrice line-through text-gray-500 text-[14px] 
-                    font-[500]"
-                    >
-                      $60.00
-                    </span>
-                    <span className="price text-[#3872fa] text-[14px] font-[600]">
-                      $30.00
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }} align="left">
-                  <div className="flex flex-col items-start text-[14px]">
-                    <div>
-                      <span className="font-semibold">234 </span>
-                      <span>sale</span>
-                    </div>
-
-                    <Progess value={20} type="warning" />
-                  </div>
-                </TableCell>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[350px]">
-                    <div className="img w-[65px] h-[65px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="vay2.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-
-                    <div className="info w-[75%]">
-                      <h3 className="!font-[600] !text-[12px] leading-4 hover:text-[#3872fa]">
-                        <Link to="/product/45745">
-                          Áo sơ mi nữ phong cách đẳng cấp vjppro luxury | JUNO
-                          From VietNam
-                        </Link>
-                      </h3>
-                      <span className="text-[12px]">Fashion</span>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Fashion
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Women
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-start gap-1 flex-col">
-                    <span
-                      className="oldPrice line-through text-gray-500 text-[14px] 
-                    font-[500]"
-                    >
-                      $60.00
-                    </span>
-                    <span className="price text-[#3872fa] text-[14px] font-[600]">
-                      $30.00
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }} align="left">
-                  <div className="flex flex-col items-start text-[14px]">
-                    <div>
-                      <span className="font-semibold">234 </span>
-                      <span>sale</span>
-                    </div>
-
-                    <Progess value={20} type="warning" />
-                  </div>
-                </TableCell>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[350px]">
-                    <div className="img w-[65px] h-[65px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="vay2.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-
-                    <div className="info w-[75%]">
-                      <h3 className="!font-[600] !text-[12px] leading-4 hover:text-[#3872fa]">
-                        <Link to="/product/45745">
-                          Áo sơ mi nữ phong cách đẳng cấp vjppro luxury | JUNO
-                          From VietNam
-                        </Link>
-                      </h3>
-                      <span className="text-[12px]">Fashion</span>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Fashion
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Women
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-start gap-1 flex-col">
-                    <span
-                      className="oldPrice line-through text-gray-500 text-[14px] 
-                    font-[500]"
-                    >
-                      $60.00
-                    </span>
-                    <span className="price text-[#3872fa] text-[14px] font-[600]">
-                      $30.00
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }} align="left">
-                  <div className="flex flex-col items-start text-[14px]">
-                    <div>
-                      <span className="font-semibold">234 </span>
-                      <span>sale</span>
-                    </div>
-
-                    <Progess value={20} type="warning" />
-                  </div>
-                </TableCell>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[350px]">
-                    <div className="img w-[65px] h-[65px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="vay2.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-
-                    <div className="info w-[75%]">
-                      <h3 className="!font-[600] !text-[12px] leading-4 hover:text-[#3872fa]">
-                        <Link to="/product/45745">
-                          Áo sơ mi nữ phong cách đẳng cấp vjppro luxury | JUNO
-                          From VietNam
-                        </Link>
-                      </h3>
-                      <span className="text-[12px]">Fashion</span>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Fashion
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Women
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-start gap-1 flex-col">
-                    <span
-                      className="oldPrice line-through text-gray-500 text-[14px] 
-                    font-[500]"
-                    >
-                      $60.00
-                    </span>
-                    <span className="price text-[#3872fa] text-[14px] font-[600]">
-                      $30.00
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }} align="left">
-                  <div className="flex flex-col items-start text-[14px]">
-                    <div>
-                      <span className="font-semibold">234 </span>
-                      <span>sale</span>
-                    </div>
-
-                    <Progess value={20} type="warning" />
-                  </div>
-                </TableCell>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[350px]">
-                    <div className="img w-[65px] h-[65px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="vay2.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-
-                    <div className="info w-[75%]">
-                      <h3 className="!font-[600] !text-[12px] leading-4 hover:text-[#3872fa]">
-                        <Link to="/product/45745">
-                          Áo sơ mi nữ phong cách đẳng cấp vjppro luxury | JUNO
-                          From VietNam
-                        </Link>
-                      </h3>
-                      <span className="text-[12px]">Fashion</span>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Fashion
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Women
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-start gap-1 flex-col">
-                    <span
-                      className="oldPrice line-through text-gray-500 text-[14px] 
-                    font-[500]"
-                    >
-                      $60.00
-                    </span>
-                    <span className="price text-[#3872fa] text-[14px] font-[600]">
-                      $30.00
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }} align="left">
-                  <div className="flex flex-col items-start text-[14px]">
-                    <div>
-                      <span className="font-semibold">234 </span>
-                      <span>sale</span>
-                    </div>
-
-                    <Progess value={20} type="warning" />
-                  </div>
-                </TableCell>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[350px]">
-                    <div className="img w-[65px] h-[65px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="vay2.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-
-                    <div className="info w-[75%]">
-                      <h3 className="!font-[600] !text-[12px] leading-4 hover:text-[#3872fa]">
-                        <Link to="/product/45745">
-                          Áo sơ mi nữ phong cách đẳng cấp vjppro luxury | JUNO
-                          From VietNam
-                        </Link>
-                      </h3>
-                      <span className="text-[12px]">Fashion</span>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Fashion
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Women
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-start gap-1 flex-col">
-                    <span
-                      className="oldPrice line-through text-gray-500 text-[14px] 
-                    font-[500]"
-                    >
-                      $60.00
-                    </span>
-                    <span className="price text-[#3872fa] text-[14px] font-[600]">
-                      $30.00
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }} align="left">
-                  <div className="flex flex-col items-start text-[14px]">
-                    <div>
-                      <span className="font-semibold">234 </span>
-                      <span>sale</span>
-                    </div>
-
-                    <Progess value={20} type="warning" />
-                  </div>
-                </TableCell>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[350px]">
-                    <div className="img w-[65px] h-[65px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="vay2.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-
-                    <div className="info w-[75%]">
-                      <h3 className="!font-[600] !text-[12px] leading-4 hover:text-[#3872fa]">
-                        <Link to="/product/45745">
-                          Áo sơ mi nữ phong cách đẳng cấp vjppro luxury | JUNO
-                          From VietNam
-                        </Link>
-                      </h3>
-                      <span className="text-[12px]">Fashion</span>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Fashion
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Women
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-start gap-1 flex-col">
-                    <span
-                      className="oldPrice line-through text-gray-500 text-[14px] 
-                    font-[500]"
-                    >
-                      $60.00
-                    </span>
-                    <span className="price text-[#3872fa] text-[14px] font-[600]">
-                      $30.00
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }} align="left">
-                  <div className="flex flex-col items-start text-[14px]">
-                    <div>
-                      <span className="font-semibold">234 </span>
-                      <span>sale</span>
-                    </div>
-
-                    <Progess value={20} type="warning" />
-                  </div>
-                </TableCell>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[350px]">
-                    <div className="img w-[65px] h-[65px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="vay2.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-
-                    <div className="info w-[75%]">
-                      <h3 className="!font-[600] !text-[12px] leading-4 hover:text-[#3872fa]">
-                        <Link to="/product/45745">
-                          Áo sơ mi nữ phong cách đẳng cấp vjppro luxury | JUNO
-                          From VietNam
-                        </Link>
-                      </h3>
-                      <span className="text-[12px]">Fashion</span>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Fashion
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Women
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-start gap-1 flex-col">
-                    <span
-                      className="oldPrice line-through text-gray-500 text-[14px] 
-                    font-[500]"
-                    >
-                      $60.00
-                    </span>
-                    <span className="price text-[#3872fa] text-[14px] font-[600]">
-                      $30.00
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }} align="left">
-                  <div className="flex flex-col items-start text-[14px]">
-                    <div>
-                      <span className="font-semibold">234 </span>
-                      <span>sale</span>
-                    </div>
-
-                    <Progess value={20} type="warning" />
-                  </div>
-                </TableCell>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-
-              <TableRow>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <Checkbox {...label} size="small" />
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-4 w-[350px]">
-                    <div className="img w-[65px] h-[65px] rounded-md overflow-hidden group">
-                      <Link to="/product/45745" data-discover="true">
-                        <img
-                          src="vay2.jpg"
-                          className="w-full group-hover:scale-105 transition-all"
-                        />
-                      </Link>
-                    </div>
-
-                    <div className="info w-[75%]">
-                      <h3 className="!font-[600] !text-[12px] leading-4 hover:text-[#3872fa]">
-                        <Link to="/product/45745">
-                          Áo sơ mi nữ phong cách đẳng cấp vjppro luxury | JUNO
-                          From VietNam
-                        </Link>
-                      </h3>
-                      <span className="text-[12px]">Fashion</span>
-                    </div>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Fashion
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  Women
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-start gap-1 flex-col">
-                    <span
-                      className="oldPrice line-through text-gray-500 text-[14px] 
-                    font-[500]"
-                    >
-                      $60.00
-                    </span>
-                    <span className="price text-[#3872fa] text-[14px] font-[600]">
-                      $30.00
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell style={{ minWidth: columns.minWidth }} align="left">
-                  <div className="flex flex-col items-start text-[14px]">
-                    <div>
-                      <span className="font-semibold">234 </span>
-                      <span>sale</span>
-                    </div>
-
-                    <Progess value={20} type="warning" />
-                  </div>
-                </TableCell>
-                <TableCell style={{ minWidth: columns.minWidth }}>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <AiOutlineEdit className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <FaRegEye className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-
-                    <Button
-                      className="!w-[35px] !h-[35px] bg-[#f1f1f1]  !min-w-[35px] !rounded-full
-                    hover:!bg[#f1f1f1]"
-                    >
-                      <GoTrash className="text-[rgba(0,0,0,0.7)] text-[20px] " />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
+                        <div>
+                          <p className="font-[600] text-[13px] line-clamp-2">
+                            {product.name}
+                          </p>
+                          <span className="text-[12px] text-gray-500">
+                            {product.brand || "No brand"}
+                          </span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>{product.catName || "-"}</TableCell>
+                    <TableCell>
+                      {product.subCatName || product.subCat || "-"}
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        {product.oldPrice > 0 && (
+                          <span className="block line-through text-gray-500 text-[12px]">
+                            ${Number(product.oldPrice).toFixed(2)}
+                          </span>
+                        )}
+                        <span className="text-blue-600 font-[600]">
+                          ${Number(product.price || 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{product.countInStock}</TableCell>
+                    <TableCell>{product.isFeatured ? "Yes" : "No"}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button
+                          aria-label="View product details"
+                          title="View details"
+                          className="!min-w-[35px] !w-[35px] !h-[35px] !rounded-full"
+                          onClick={() => viewProduct(product)}
+                        >
+                          <FaRegEye size={18} />
+                        </Button>
+                        <Button
+                          aria-label="Edit product"
+                          className="!min-w-[35px] !w-[35px] !h-[35px] !rounded-full"
+                          onClick={() => openForm(product)}
+                        >
+                          <AiOutlineEdit size={20} />
+                        </Button>
+                        <Button
+                          aria-label="Delete product"
+                          color="error"
+                          className="!min-w-[35px] !w-[35px] !h-[35px] !rounded-full"
+                          onClick={() => setDeleteDialog({ type: "single", product })}
+                        >
+                          <GoTrash size={19} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
         <TablePagination
-          rowsPerPageOptions={[10, 25, 100]}
           component="div"
-          count={10}
-          rowsPerPage={rowsPerPage}
+          count={filtered.length}
           page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[10, 25, 50]}
+          onPageChange={(_, value) => setPage(value)}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(Number(e.target.value));
+            setPage(0);
+          }}
         />
-
-        <div className="flex items-center justify-end pt-5 pb-5 px-4">
-          <Pagination count={10} color="primary" />
-        </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(deleteDialog)}
+        title={deleteDialog?.type === "bulk" ? "Delete selected products?" : "Delete product?"}
+        message={deleteDialog?.type === "bulk" ? `You are about to delete ${selectedIds.length} selected products. This action cannot be undone.` : `You are about to delete “${deleteDialog?.product?.name || "this product"}”. This action cannot be undone.`}
+        loading={bulkDeleting}
+        onClose={() => setDeleteDialog(null)}
+        onConfirm={() => deleteDialog?.type === "bulk" ? deleteSelected() : removeProduct(deleteDialog.product)}
+      />
     </>
   );
 };

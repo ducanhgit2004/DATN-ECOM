@@ -1,30 +1,42 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Button from "@mui/material/Button";
 import { FaAngleUp, FaAngleDown } from "react-icons/fa6";
 
-const QtyBox = () => {
-  const [qtyVal, setQtyVal] = useState(1);
+const QtyBox = ({ value, onChange }) => {
+  const [qtyVal, setQtyVal] = useState(value ?? 1);
+
+  useEffect(() => {
+    setQtyVal(value ?? 1);
+  }, [value]);
 
   const plusQty = () => {
     const currentValue = Number(qtyVal) || 0;
-    setQtyVal(currentValue + 1);
+    const nextValue = currentValue + 1;
+    setQtyVal(nextValue);
+    onChange?.(nextValue);
   };
 
   const minusQty = () => {
     const currentValue = Number(qtyVal) || 1;
 
     if (currentValue > 1) {
-      setQtyVal(currentValue - 1);
+      const nextValue = currentValue - 1;
+      setQtyVal(nextValue);
+      onChange?.(nextValue);
     }
   };
 
   const handleChange = (e) => {
-    setQtyVal(e.target.value);
+    const nextValue = e.target.value;
+    setQtyVal(nextValue);
+    onChange?.(nextValue);
   };
 
   const handleBlur = () => {
     if (qtyVal === "" || Number(qtyVal) < 1) {
-      setQtyVal(1);
+      const nextValue = 1;
+      setQtyVal(nextValue);
+      onChange?.(nextValue);
     }
   };
 
