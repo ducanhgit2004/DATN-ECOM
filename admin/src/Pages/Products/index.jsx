@@ -17,7 +17,7 @@ import { GoTrash } from "react-icons/go";
 import { IoMdAdd } from "react-icons/io";
 import { FaRegEye } from "react-icons/fa";
 import { MyContext } from "../../App";
-import { deleteData, fetchDataFromApi } from "../../utils/api";
+import { deleteData, editData, fetchDataFromApi } from "../../utils/api";
 import ConfirmDialog from "../../components/ConfirmDialog";
 
 const Products = ({ seller = null }) => {
@@ -43,7 +43,7 @@ const Products = ({ seller = null }) => {
       const result = await fetchDataFromApi(
         seller?._id
           ? `/api/user/admin/sellers/${seller._id}/products`
-          : "/api/product/getAllProducts?perPage=10000&page=1",
+          : "/api/product/admin/products",
       );
       if (!active) return;
       if (result?.success)
@@ -115,11 +115,35 @@ const Products = ({ seller = null }) => {
       setBulkDeleting(false);
       return;
     }
-    alertBox("success", "Product deleted successfully.");
-    setProducts((items) => items.filter((item) => item._id !== product._id));
+    alertBox("success", result.message || "Product deleted successfully.");
+    setProducts((items) =>
+      result.discontinued
+        ? items.map((item) => (item._id === product._id ? result.product : item))
+        : items.filter((item) => item._id !== product._id),
+    );
     setSelectedIds((ids) => ids.filter((id) => id !== product._id));
     setBulkDeleting(false);
     setDeleteDialog(null);
+  };
+
+  const updateApproval = async (product, approvalStatus) => {
+    const approvalReason =
+      approvalStatus === "rejected"
+        ? window.prompt("Reason for rejecting this product:", "")
+        : "";
+    if (approvalStatus === "rejected" && approvalReason === null) return;
+    const result = await editData(
+      `/api/product/admin/products/${product._id}/approval`,
+      { approvalStatus, approvalReason },
+    );
+    if (!result?.success) {
+      alertBox("error", result?.message || "Product approval could not be updated.");
+      return;
+    }
+    setProducts((items) =>
+      items.map((item) => (item._id === product._id ? result.product : item)),
+    );
+    alertBox("success", result.message);
   };
 
   const openForm = (product) =>
@@ -259,19 +283,20 @@ const Products = ({ seller = null }) => {
                 <TableCell>PRICE</TableCell>
                 <TableCell>STOCK</TableCell>
                 <TableCell>FEATURED</TableCell>
+                <TableCell>APPROVAL</TableCell>
                 <TableCell>ACTIONS</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={9} align="center">
                     Loading products...
                   </TableCell>
                 </TableRow>
               ) : visible.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={9} align="center">
                     No products found.
                   </TableCell>
                 </TableRow>
@@ -315,7 +340,25 @@ const Products = ({ seller = null }) => {
                     <TableCell>{product.countInStock}</TableCell>
                     <TableCell>{product.isFeatured ? "Yes" : "No"}</TableCell>
                     <TableCell>
+                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${product.saleStatus === "discontinued" || product.approvalStatus === "rejected" ? "bg-red-100 text-red-700" : product.approvalStatus === "pending" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+                        {product.saleStatus === "discontinued"
+                          ? "discontinued"
+                          : product.approvalStatus || "approved"}
+                      </span>
+                      {product.approvalReason && (
+                        <p className="mt-1 max-w-40 text-xs text-red-600">
+                          {product.approvalReason}
+                        </p>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <div className="flex gap-1">
+                        {product.saleStatus !== "discontinued" && product.sellerId && product.approvalStatus !== "approved" && (
+                          <Button color="success" onClick={() => updateApproval(product, "approved")}>Approve</Button>
+                        )}
+                        {product.saleStatus !== "discontinued" && product.sellerId && product.approvalStatus !== "rejected" && (
+                          <Button color="warning" onClick={() => updateApproval(product, "rejected")}>Reject</Button>
+                        )}
                         <Button
                           aria-label="View product details"
                           title="View details"

@@ -1,5 +1,6 @@
 import ProductModel from "../models/product.model.js";
 import UserModel from "../models/user.model.js";
+import OrderModel from "../models/order.model.js";
 
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
@@ -21,6 +22,13 @@ const calculateAverageRating = (reviews = []) => {
   );
   return Number((total / reviews.length).toFixed(1));
 };
+
+const hasPurchasedProduct = (userId, productId) =>
+  OrderModel.exists({
+    userId,
+    orderStatus: "delivered",
+    "items.productId": productId,
+  });
 
 export async function addProductReview(request, response) {
   try {
@@ -100,6 +108,78 @@ export async function addProductReview(request, response) {
       error: true,
       success: false,
     });
+  }
+}
+
+export async function getAdminReviews(request, response) {
+  try {
+    const products = await ProductModel.find({ "reviews.0": { $exists: true } })
+      .select("name images sellerId reviews")
+      .populate("sellerId", "name email storeName")
+      .lean();
+    const reviews = products
+      .flatMap((product) =>
+        product.reviews.map((review) => ({
+          ...review,
+          productId: product._id,
+          productName: product.name,
+          productImage: product.images?.[0] || "",
+          sellerId: product.sellerId?._id || product.sellerId || null,
+          sellerName: product.sellerId?.storeName || product.sellerId?.name || "Platform",
+        })),
+      )
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return response.json({ data: reviews, total: reviews.length, error: false, success: true });
+  } catch (error) {
+    return response.status(500).json({ message: error.message || "Unable to load reviews", error: true, success: false });
+  }
+}
+
+export async function deleteAdminReview(request, response) {
+  try {
+    const { productId, reviewId } = request.params;
+    if (!productId || !reviewId) {
+      return response.status(400).json({ message: "Product and review ids are required", error: true, success: false });
+    }
+    const product = await ProductModel.findOne({ _id: productId, "reviews._id": reviewId });
+    if (!product) {
+      return response.status(404).json({ message: "Review not found", error: true, success: false });
+    }
+
+    const purchased = await hasPurchasedProduct(request.userId, productId);
+    if (!purchased) {
+      return response.status(403).json({
+        message: "Only customers who have received this product can review it.",
+        error: true,
+        success: false,
+      });
+    }
+    product.reviews.pull({ _id: reviewId });
+    product.rating = calculateAverageRating(product.reviews);
+    await product.save();
+    return response.json({ message: "Review deleted successfully", error: false, success: true });
+  } catch (error) {
+    return response.status(500).json({ message: error.message || "Unable to delete review", error: true, success: false });
+  }
+}
+
+export async function getProductReviewEligibility(request, response) {
+  try {
+    const product = await ProductModel.exists({ _id: request.params.id });
+    if (!product) {
+      return response.status(404).json({ message: "The product is not found", error: true, success: false });
+    }
+    const eligible = Boolean(await hasPurchasedProduct(request.userId, request.params.id));
+    return response.json({
+      data: { eligible },
+      message: eligible
+        ? "You can review this product."
+        : "Only customers who have received this product can review it.",
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(500).json({ message: error.message || "Unable to check review eligibility", error: true, success: false });
   }
 }
 
@@ -188,7 +268,11 @@ export async function createProduct(request, response) {
       thirdsubCat: request.body.thirdsubCat,
       thirdsubCatName: request.body.thirdsubCatName,
       thirdsubCatId: request.body.thirdsubCatId,
-      category: request.body.category || request.body.catId,
+      category:
+        request.body.thirdsubCatId ||
+        request.body.subCatId ||
+        request.body.category ||
+        request.body.catId,
       countInStock,
       inventoryType,
       inventoryVariants,
@@ -241,7 +325,11 @@ export async function getAllProducts(request, response) {
   try {
     const page = parseInt(request.query.page) || 1;
     const perPage = Math.max(1, parseInt(request.query.perPage) || 10);
-    const totalPosts = await ProductModel.countDocuments();
+    const publicFilter = {
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
+    };
+    const totalPosts = await ProductModel.countDocuments(publicFilter);
     const totalPages = Math.ceil(totalPosts / perPage);
 
     if (totalPages > 0 && page > totalPages) {
@@ -252,7 +340,7 @@ export async function getAllProducts(request, response) {
       });
     }
 
-    const products = await ProductModel.find()
+    const products = await ProductModel.find(publicFilter)
       .populate("category")
       .skip((page - 1) * perPage)
       .limit(perPage)
@@ -281,6 +369,65 @@ export async function getAllProducts(request, response) {
   }
 }
 
+export async function getAdminProducts(request, response) {
+  try {
+    const products = await ProductModel.find()
+      .populate("category")
+      .populate("sellerId", "name storeName email")
+      .sort({ createdAt: -1 });
+    return response.json({ products, error: false, success: true });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Unable to load products",
+      error: true,
+      success: false,
+    });
+  }
+}
+
+export async function updateProductApproval(request, response) {
+  try {
+    const { approvalStatus, approvalReason = "" } = request.body || {};
+    if (!["approved", "rejected"].includes(approvalStatus)) {
+      return response.status(400).json({
+        message: "Approval status must be approved or rejected",
+        error: true,
+        success: false,
+      });
+    }
+    const product = await ProductModel.findByIdAndUpdate(
+      request.params.id,
+      {
+        approvalStatus,
+        approvalReason:
+          approvalStatus === "rejected" ? String(approvalReason).trim() : "",
+        approvedAt: approvalStatus === "approved" ? new Date() : null,
+        approvedBy: approvalStatus === "approved" ? request.userId : null,
+      },
+      { new: true, runValidators: true },
+    ).populate("sellerId", "name storeName email");
+    if (!product) {
+      return response.status(404).json({
+        message: "Product not found",
+        error: true,
+        success: false,
+      });
+    }
+    return response.json({
+      message: `Product ${approvalStatus}`,
+      product,
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || "Unable to update product approval",
+      error: true,
+      success: false,
+    });
+  }
+}
+
 export async function getAllProductsByCatId(request, response) {
   try {
     const page = parseInt(request.query.page) || 1;
@@ -298,6 +445,8 @@ export async function getAllProductsByCatId(request, response) {
 
     const products = await ProductModel.find({
       catId: request.params.id,
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
     })
       .populate("category")
       .skip((page - 1) * perPage)
@@ -344,6 +493,8 @@ export async function getAllProductsByCatName(request, response) {
 
     const products = await ProductModel.find({
       catName: request.query.catName,
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
     })
       .populate("category")
       .skip((page - 1) * perPage)
@@ -390,6 +541,8 @@ export async function getAllProductsBySubCatId(request, response) {
 
     const products = await ProductModel.find({
       subCatId: request.params.id,
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
     })
       .populate("category")
       .skip((page - 1) * perPage)
@@ -436,6 +589,8 @@ export async function getAllProductsBySubCatName(request, response) {
 
     const products = await ProductModel.find({
       subCat: request.query.subCat,
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
     })
       .populate("category")
       .skip((page - 1) * perPage)
@@ -482,6 +637,8 @@ export async function getAllProductsByThirdLevelCatId(request, response) {
 
     const products = await ProductModel.find({
       thirdsubCatId: request.params.id,
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
     })
       .populate("category")
       .skip((page - 1) * perPage)
@@ -528,6 +685,8 @@ export async function getAllProductsByThirdLevelCatName(request, response) {
 
     const products = await ProductModel.find({
       thirdsubCat: request.query.thirdsubCat,
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
     })
       .populate("category")
       .skip((page - 1) * perPage)
@@ -578,15 +737,15 @@ export async function getAllProductsByPrice(request, response) {
     let productList = [];
 
     if (catId) {
-      productList = await ProductModel.find({ catId }).populate("category");
+      productList = await ProductModel.find({ catId, approvalStatus: { $nin: ["pending", "rejected"] }, saleStatus: { $ne: "discontinued" } }).populate("category");
     } else if (subCatId) {
-      productList = await ProductModel.find({ subCatId }).populate("category");
+      productList = await ProductModel.find({ subCatId, approvalStatus: { $nin: ["pending", "rejected"] }, saleStatus: { $ne: "discontinued" } }).populate("category");
     } else if (thirdsubCatId) {
-      productList = await ProductModel.find({ thirdsubCatId }).populate(
+      productList = await ProductModel.find({ thirdsubCatId, approvalStatus: { $nin: ["pending", "rejected"] }, saleStatus: { $ne: "discontinued" } }).populate(
         "category",
       );
     } else {
-      productList = await ProductModel.find().populate("category");
+      productList = await ProductModel.find({ approvalStatus: { $nin: ["pending", "rejected"] }, saleStatus: { $ne: "discontinued" } }).populate("category");
     }
 
     const filteredProducts = productList.filter((product) => {
@@ -640,7 +799,10 @@ export async function getAllProductsByRating(request, response) {
     const subCatId = request.query.subCatId;
     const thirdsubCatId = request.query.thirdsubCatId;
 
-    const filter = {};
+    const filter = {
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
+    };
 
     if (rating !== undefined && rating !== "") {
       filter.rating = rating;
@@ -700,7 +862,10 @@ export async function getAllProductsByRating(request, response) {
 
 export async function getProductsCount(request, response) {
   try {
-    const productsCount = await ProductModel.countDocuments();
+    const productsCount = await ProductModel.countDocuments({
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
+    });
 
     if (!productsCount) {
       response.status(500).json({
@@ -727,6 +892,8 @@ export async function getAllFeaturedProducts(request, response) {
   try {
     const products = await ProductModel.find({
       isFeatured: true,
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
     }).populate("category");
 
     if (!products) {
@@ -761,6 +928,22 @@ export async function deleteProduct(request, response) {
         message: "Product Not found",
         error: true,
         success: false,
+      });
+    }
+
+    const hasOrderHistory = await OrderModel.exists({
+      "items.productId": product._id,
+    });
+    if (hasOrderHistory) {
+      product.saleStatus = "discontinued";
+      product.discontinuedAt = new Date();
+      await product.save();
+      return response.json({
+        message: "Product has order history and was marked as discontinued",
+        product,
+        discontinued: true,
+        error: false,
+        success: true,
       });
     }
 
@@ -814,7 +997,11 @@ export async function getProduct(request, response) {
       });
     }
 
-    const product = await ProductModel.findById(productId).populate("category");
+    const product = await ProductModel.findOne({
+      _id: productId,
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
+    }).populate("category");
 
     if (!product) {
       return response.status(404).json({
@@ -890,7 +1077,11 @@ export async function updateProduct(request, response) {
         subCatId: request.body.subCatId,
         subCatName: request.body.subCatName,
         catName: request.body.catName,
-        category: request.body.category,
+        category:
+          request.body.thirdsubCatId ||
+          request.body.subCatId ||
+          request.body.category ||
+          request.body.catId,
         thirdsubCat: request.body.thirdsubCat,
         thirdsubCatName: request.body.thirdsubCatName,
         thirdsubCatId: request.body.thirdsubCatId,

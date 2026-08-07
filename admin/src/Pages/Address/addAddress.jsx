@@ -7,6 +7,7 @@ import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import { MyContext } from "../../App";
 import { postData } from "../../utils/api";
+import { isValidPhone, normalizePhone } from "../../utils/phone";
 
 const AddAddress = () => {
   const noLabelId = React.useId();
@@ -84,6 +85,10 @@ const AddAddress = () => {
 
     if (!formData.mobile.trim()) {
       context?.alertBox?.("error", "Please enter Mobile Number");
+      return;
+    }
+    if (!isValidPhone(formData.mobile)) {
+      context?.alertBox?.("error", "Phone number must contain 9 to 15 digits");
       return;
     }
 
@@ -240,8 +245,7 @@ const AddAddress = () => {
                 onChange={(value) => {
                   setFormData((previousData) => ({
                     ...previousData,
-                    mobile:
-                      typeof value === "string" ? value : String(value ?? ""),
+                    mobile: normalizePhone(value),
                   }));
                 }}
                 disabled={isLoading}

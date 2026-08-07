@@ -3,46 +3,21 @@ import mongoose from "mongoose";
 const myListSchema = mongoose.Schema(
   {
     productId: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
       required: true,
     },
 
     userId: {
-      type: String,
-      required: true,
-    },
-    productTitle: {
-      type: String,
-      required: true,
-    },
-
-    image: {
-      type: String,
-      required: true,
-    },
-    rating: {
-      type: Number,
-      required: true,
-    },
-    price: {
-      type: Number,
-      required: true,
-    },
-    oldPrice: {
-      type: Number,
-      required: true,
-    },
-    brand: {
-      type: String,
-      required: true,
-    },
-    discount: {
-      type: Number,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true,
     },
   },
   { timestamps: true },
 );
+
+myListSchema.index({ userId: 1, productId: 1 }, { unique: true });
 
 const MyListModel = mongoose.model("MyList", myListSchema);
 

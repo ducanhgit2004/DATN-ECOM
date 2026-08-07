@@ -1,6 +1,7 @@
 import { useState, createContext, useEffect } from "react";
 import {
   BrowserRouter,
+  Navigate,
   Route,
   Routes,
   useLocation,
@@ -38,6 +39,9 @@ import Address from "./Pages/MyAccount/address";
 import BlogDetails from "./Pages/BlogDetails";
 import SearchPage from "./Pages/Search";
 import StorePage from "./Pages/Store";
+import ComparePage from "./Pages/Compare";
+import Messages from "./Pages/Messages";
+import HelpCenter from "./Pages/HelpCenter";
 
 const MyContext = createContext();
 
@@ -50,6 +54,9 @@ const ScrollToTop = () => {
 
   return null;
 };
+
+const ProtectedRoute = ({ isLogin, children }) =>
+  isLogin ? children : <Navigate to="/login" replace />;
 
 function App() {
   const [openProductDetailsModal, setOpenProductDetailsModal] = useState(false);
@@ -69,6 +76,18 @@ function App() {
   const [cartLoading, setCartLoading] = useState(false);
   const [myListItems, setMyListItems] = useState([]);
   const [myListLoading, setMyListLoading] = useState(false);
+  const [compareIds, setCompareIds] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("compareProductIds") || "[]");
+      return Array.isArray(stored) ? stored.slice(0, 4) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("compareProductIds", JSON.stringify(compareIds));
+  }, [compareIds]);
 
   const handleCloseProductDetailsModal = () => {
     setOpenProductDetailsModal(false);
@@ -102,6 +121,8 @@ function App() {
           localStorage.removeItem("accesstoken");
           localStorage.removeItem("refreshToken");
           setUserData(null);
+          setCartItems([]);
+          setMyListItems([]);
           setIsLogin(false);
         }
       } catch {
@@ -112,6 +133,8 @@ function App() {
         localStorage.removeItem("accesstoken");
         localStorage.removeItem("refreshToken");
         setUserData(null);
+        setCartItems([]);
+        setMyListItems([]);
         setIsLogin(false);
       }
     };
@@ -241,13 +264,6 @@ function App() {
 
     const result = await postData("/api/myList/add", {
       productId: product._id,
-      productTitle: product.name,
-      image: product.images?.[0] || "/placeholder-image.png",
-      rating: Number(product.rating) || 0,
-      price: Number(product.price) || 0,
-      oldPrice: Number(product.oldPrice) || Number(product.price) || 0,
-      brand: product.brand || product.catName || "Product",
-      discount: Number(product.discount) || 0,
     });
 
     if (result?.success) {
@@ -268,6 +284,25 @@ function App() {
       alertBox("error", result?.message || "Unable to remove product.");
     }
   };
+
+  const addToCompare = (product) => {
+    if (!product?._id) return;
+    if (compareIds.includes(product._id)) {
+      alertBox("error", "This product is already in Compare.");
+      return;
+    }
+    if (compareIds.length >= 4) {
+      alertBox("error", "You can compare up to 4 products.");
+      return;
+    }
+    setCompareIds((ids) => [...ids, product._id]);
+    alertBox("success", "Product added to Compare.");
+  };
+
+  const removeFromCompare = (productId) =>
+    setCompareIds((ids) => ids.filter((id) => id !== productId));
+
+  const clearCompare = () => setCompareIds([]);
 
   const updateCartQty = async (cartItemId, qty, size) => {
     if (!cartItemId) {
@@ -313,6 +348,20 @@ function App() {
     }
   };
 
+  const logout = async () => {
+    try {
+      await fetchDataFromApi("/api/user/logout");
+    } finally {
+      localStorage.removeItem("accesstoken");
+      localStorage.removeItem("refreshToken");
+      setUserData(null);
+      setCartItems([]);
+      setMyListItems([]);
+      setOpenCartPanel(false);
+      setIsLogin(false);
+    }
+  };
+
   const values = {
     setOpenProductDetailsModal,
     setOpenCartPanel,
@@ -320,6 +369,7 @@ function App() {
     isLogin,
     setIsLogin,
     setUserData,
+    logout,
     userData,
     catData,
     products,
@@ -338,6 +388,13 @@ function App() {
     loadMyList,
     addToMyList,
     removeFromMyList,
+    compareIds,
+    compareItems: compareIds
+      .map((id) => products.find((product) => product._id === id))
+      .filter(Boolean),
+    addToCompare,
+    removeFromCompare,
+    clearCompare,
   };
 
   return (
@@ -351,6 +408,8 @@ function App() {
           <Route path="/productListing" element={<ProductListing />} />
           <Route path="/product/:id" element={<ProductDetails />} />
           <Route path="/shop/:sellerId" element={<StorePage />} />
+          <Route path="/compare" element={<ComparePage />} />
+          <Route path="/messages" element={<Messages />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/cart" element={<CartPage />} />
@@ -358,11 +417,19 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/my-account" element={<MyAccount />} />
-          <Route path="/my-list" element={<MyList />} />
+          <Route
+            path="/my-list"
+            element={
+              <ProtectedRoute isLogin={isLogin}>
+                <MyList />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/my-orders" element={<Orders />} />
           <Route path="/address" element={<Address />} />
           <Route path="/blog/:id" element={<BlogDetails />} />
           <Route path="/search" element={<SearchPage />} />
+          <Route path="/help-center" element={<HelpCenter />} />
         </Routes>
 
         <Footer />

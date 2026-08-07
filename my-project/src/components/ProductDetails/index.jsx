@@ -3,10 +3,11 @@ import Button from "@mui/material/Button";
 import Rating from "@mui/material/Rating";
 import { MdOutlineShoppingCart } from "react-icons/md";
 import { FaRegHeart } from "react-icons/fa";
+import { IoChatbubbleEllipsesOutline, IoGitCompareOutline } from "react-icons/io5";
 import QtyBox from "../QtyBox";
 import { MyContext } from "../../App";
-import { postData } from "../../utils/api";
-import { Link } from "react-router-dom";
+import { fetchDataFromApi, postData } from "../../utils/api";
+import { Link, useNavigate } from "react-router-dom";
 
 const money = (value) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -19,12 +20,17 @@ const cleanOptions = (value) =>
 
 const ProductDetailsComponent = ({ product }) => {
   const context = useContext(MyContext);
+  const navigate = useNavigate();
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedVariant, setSelectedVariant] = useState("");
   const [productData, setProductData] = useState(product);
   const [draftRating, setDraftRating] = useState(5);
   const [draftComment, setDraftComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewEligibility, setReviewEligibility] = useState({
+    productId: "",
+    eligible: false,
+  });
   const [activeTab, setActiveTab] = useState("description");
   const [quantity, setQuantity] = useState(1);
 
@@ -33,6 +39,42 @@ const ProductDetailsComponent = ({ product }) => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setProductData(product);
   }, [product]);
+
+  useEffect(() => {
+    const productId = productData?._id;
+    if (!productId) return;
+    const storageKey = "novacartRecentProducts";
+    const recent = JSON.parse(localStorage.getItem(storageKey) || "[]")
+      .filter((id) => id !== productId);
+    localStorage.setItem(storageKey, JSON.stringify([productId, ...recent].slice(0, 20)));
+    window.dispatchEvent(new Event("recommendations-updated"));
+
+    if (context?.isLogin && !sessionStorage.getItem(`viewed:${productId}`)) {
+      sessionStorage.setItem(`viewed:${productId}`, "1");
+      postData(`/api/product/recommendations/view/${productId}`, {});
+    }
+  }, [context?.isLogin, productData?._id]);
+
+  useEffect(() => {
+    if (!context?.isLogin || !productData?._id) return;
+    let active = true;
+    fetchDataFromApi(`/api/product/${productData._id}/review-eligibility`).then(
+      (result) => {
+        if (active) {
+          setReviewEligibility({
+            productId: productData._id,
+            eligible: Boolean(result?.success && result?.data?.eligible),
+          });
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [context?.isLogin, productData?._id]);
+  const eligibilityLoaded =
+    reviewEligibility.productId === productData?._id;
+  const canReview = eligibilityLoaded && reviewEligibility.eligible;
 
   if (!productData)
     return (
@@ -113,6 +155,24 @@ const ProductDetailsComponent = ({ product }) => {
     }
   };
 
+  const startChat = async () => {
+    if (!context?.isLogin) {
+      context?.alertBox?.("error", "Please login to chat with the shop.");
+      navigate("/login");
+      return;
+    }
+    const result = await postData("/api/chat/conversations", {
+      sellerId: productData.sellerId?._id || productData.sellerId,
+      productId: productData._id,
+    });
+    if (result?.success) {
+      context?.setOpenProductDetailsModal?.(false);
+      navigate(`/messages?conversation=${result.data._id}`);
+    } else {
+      context?.alertBox?.("error", result?.message || "Unable to start chat.");
+    }
+  };
+
   return (
     <>
       <h1 className="text-[25px] font-[700] mb-2">{productData.name}</h1>
@@ -125,6 +185,7 @@ const ProductDetailsComponent = ({ product }) => {
         <Rating value={Number(productData.rating) || 0} size="small" readOnly />
       </div>
       {productData.sellerId && (
+        <>
         <Link
           to={`/shop/${productData.sellerId?._id || productData.sellerId}`}
           className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-[600] text-gray-700 transition hover:border-[#ff5252] hover:text-[#ff5252]"
@@ -133,6 +194,14 @@ const ProductDetailsComponent = ({ product }) => {
           Visit seller shop
           <span aria-hidden="true">→</span>
         </Link>
+        <button
+          type="button"
+          onClick={startChat}
+          className="ml-2 mt-4 inline-flex items-center gap-2 rounded-lg bg-[#ff5252] px-4 py-2 text-sm font-semibold text-white hover:bg-[#e64747]"
+        >
+          <IoChatbubbleEllipsesOutline /> Chat with shop
+        </button>
+        </>
       )}
       <div className="flex items-center gap-4 mt-4">
         {hasOldPrice && (
@@ -242,6 +311,17 @@ const ProductDetailsComponent = ({ product }) => {
           ? "Added to My List"
           : "Add to Wishlist"}
       </button>
+      <button
+        type="button"
+        disabled={context?.compareIds?.includes(productData._id)}
+        onClick={() => context?.addToCompare?.(productData)}
+        className="ml-5 inline-flex items-center gap-2 mt-6 font-[500] hover:text-[#ff5252] disabled:text-[#ff5252] disabled:cursor-default transition-colors"
+      >
+        <IoGitCompareOutline />
+        {context?.compareIds?.includes(productData._id)
+          ? "Added to Compare"
+          : "Add to Compare"}
+      </button>
 
       <div className="mt-8 border-t border-gray-200 pt-6">
         <div className="flex rounded-full bg-gray-100 p-1 w-fit">
@@ -299,6 +379,16 @@ const ProductDetailsComponent = ({ product }) => {
                 onSubmit={handleSubmitReview}
                 className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4"
               >
+                {!context?.isLogin || !canReview ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {!context?.isLogin
+                      ? "Please log in to review this product."
+                      : !eligibilityLoaded
+                        ? "Checking your purchase history..."
+                        : "Only customers who have received this product can leave a review."}
+                  </div>
+                ) : (
+                  <>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-[600] text-gray-700">
                     Your rating
@@ -329,6 +419,8 @@ const ProductDetailsComponent = ({ product }) => {
                     {submittingReview ? "Submitting..." : "Submit Review"}
                   </Button>
                 </div>
+                  </>
+                )}
               </form>
 
               <div className="mt-5 space-y-3">
@@ -366,6 +458,13 @@ const ProductDetailsComponent = ({ product }) => {
                       <p className="mt-3 whitespace-pre-line text-sm text-gray-600">
                         {review.comment}
                       </p>
+                      {review.sellerReply && (
+                        <div className="mt-3 rounded-lg border-l-4 border-[#ff5252] bg-red-50 px-4 py-3">
+                          <p className="text-xs font-[700] uppercase tracking-wide text-[#ff5252]">Seller response</p>
+                          <p className="mt-1 whitespace-pre-line text-sm text-gray-700">{review.sellerReply}</p>
+                          {review.sellerRepliedAt && <p className="mt-1 text-xs text-gray-500">{new Date(review.sellerRepliedAt).toLocaleDateString()}</p>}
+                        </div>
+                      )}
                     </div>
                   ))
                 ) : (

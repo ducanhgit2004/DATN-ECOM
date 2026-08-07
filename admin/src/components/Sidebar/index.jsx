@@ -3,7 +3,7 @@ import { useState, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { RxDashboard } from "react-icons/rx";
 import { FaRegImage } from "react-icons/fa";
-import { FiUsers } from "react-icons/fi";
+import { FiMessageSquare, FiUsers } from "react-icons/fi";
 import { MdOutlineStorefront } from "react-icons/md";
 import { RiProductHuntLine } from "react-icons/ri";
 import { TbCategory } from "react-icons/tb";
@@ -308,6 +308,20 @@ const Sidebar = () => {
             !text-[rgba(0,0,0,0.8)] !font-[500] items-center !py-2 hover:!bg-[#f1f1f1]"
               >
                 <IoBagCheck className="text-[18px]" /> <span>Orders</span>
+              </Button>
+            </Link>
+          </li>
+          <li>
+            <Link to="/reviews">
+              <Button className="w-full !capitalize !justify-start flex gap-3 !text-[16px] !text-[rgba(0,0,0,0.8)] !font-[500] items-center !py-2 hover:!bg-[#f1f1f1]">
+                <FiMessageSquare className="text-[18px]" /> <span>Reviews</span>
+              </Button>
+            </Link>
+          </li>
+          <li>
+            <Link to="/support">
+              <Button className="w-full !capitalize !justify-start flex gap-3 !text-[16px] !text-[rgba(0,0,0,0.8)] !font-[500] items-center !py-2 hover:!bg-[#f1f1f1]">
+                <FiMessageSquare className="text-[18px]" /> <span>Support</span>
               </Button>
             </Link>
           </li>

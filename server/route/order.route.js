@@ -8,6 +8,7 @@ import {
   getMyOrdersController,
   getAdminOrdersController,
   getAdminDashboardStatsController,
+  getAdminNotificationsController,
   getPaypalConfigController,
   capturePaypalOrderController,
   updateAdminOrderStatusController,
@@ -24,6 +25,7 @@ orderRouter.post("/paypal/create", auth, createPaypalOrderController);
 orderRouter.post("/paypal/capture", auth, capturePaypalOrderController);
 orderRouter.get("/admin/orders", auth, getAdminOrdersController);
 orderRouter.get("/admin/dashboard-stats", auth, getAdminDashboardStatsController);
+orderRouter.get("/admin/notifications", auth, getAdminNotificationsController);
 orderRouter.put("/admin/orders/:orderId/status", auth, updateAdminOrderStatusController);
 orderRouter.get("/my-orders", auth, getMyOrdersController);
 orderRouter.get("/my-orders/:orderId", auth, getMyOrderController);

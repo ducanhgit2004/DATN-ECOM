@@ -16,6 +16,7 @@ import "react-international-phone/style.css";
 import { useNavigate } from "react-router-dom";
 import { MyContext } from "../../App";
 import { fetchDataFromApi, postData, putData } from "../../utils/api";
+import { isValidPhone, normalizePhone } from "../../utils/phone";
 
 const money = (value) =>
   new Intl.NumberFormat("en-US", {
@@ -80,7 +81,7 @@ const Checkout = () => {
       ),
     [cartItems],
   );
-  const shipping = subtotal > 0 ? 7 : 0;
+  const shipping = subtotal > 0 && subtotal < 200 ? 7 : 0;
   const total = subtotal + shipping;
 
   const loadAddresses = useCallback(async (preferredAddressId = "") => {
@@ -194,7 +195,7 @@ const Checkout = () => {
   };
 
   const handlePhoneChange = (value) => {
-    setAddressForm((current) => ({ ...current, mobile: value }));
+    setAddressForm((current) => ({ ...current, mobile: normalizePhone(value) }));
   };
 
   const openAddAddress = () => {
@@ -229,6 +230,10 @@ const Checkout = () => {
     );
     if (missingField) {
       context?.alertBox?.("error", "Please fill in all address fields.");
+      return;
+    }
+    if (!isValidPhone(addressForm.mobile)) {
+      context?.alertBox?.("error", "Phone number must contain 9 to 15 digits.");
       return;
     }
 
@@ -525,7 +530,7 @@ const Checkout = () => {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-600">Shipping</span>
-                <span>{money(shipping)}</span>
+                <span>{subtotal >= 200 ? "Free" : money(shipping)}</span>
               </div>
               <div className="flex items-center justify-between border-t pt-3 text-base">
                 <span className="font-semibold">Total</span>

@@ -9,6 +9,9 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { request, uploadProductImages, uploadStoreImage } from "./api";
+import Messages from "./Messages";
+import "./review.css";
+import "./order-details.css";
 
 const money = (value) =>
   new Intl.NumberFormat("en-US", {
@@ -61,7 +64,7 @@ const AuthCard = ({ mode }) => {
     } else {
       localStorage.setItem("sellerAccessToken", result.data.accesstoken);
       localStorage.setItem("sellerRefreshToken", result.data.refreshToken);
-      navigate("/");
+      navigate("/dashboard");
     }
     setBusy(false);
   };
@@ -159,12 +162,13 @@ const Layout = ({ seller, children }) => {
           NovaCart <span>Seller</span>
         </div>
         <nav>
-          <NavLink to="/" end>
+          <NavLink to="/dashboard">
             Dashboard
           </NavLink>
           <NavLink to="/products">Products</NavLink>
           <NavLink to="/orders">Orders</NavLink>
           <NavLink to="/reviews">Customer reviews</NavLink>
+          <NavLink to="/messages">Messages</NavLink>
           <NavLink to="/store">Store profile</NavLink>
         </nav>
         <button className="logout" onClick={logout}>
@@ -402,7 +406,6 @@ const emptyProduct = {
   thirdsubCatName: "",
   thirdsubCatId: "",
   category: null,
-  rating: 0,
   isFeatured: false,
   productRam: [],
   size: [],
@@ -556,7 +559,6 @@ const Products = () => {
       price: Number(form.price),
       oldPrice: Number(form.oldPrice || 0),
       discount: Number(form.discount || 0),
-      rating: Number(form.rating || 0),
       countInStock:
         form.inventoryType === "none"
           ? Number(form.countInStock)
@@ -613,6 +615,7 @@ const Products = () => {
                 <th>Product</th>
                 <th>Price</th>
                 <th>Stock</th>
+                <th>Approval</th>
                 <th>Category</th>
                 <th>Actions</th>
               </tr>
@@ -631,17 +634,27 @@ const Products = () => {
                   </td>
                   <td>{money(product.price)}</td>
                   <td>{product.countInStock}</td>
+                  <td>
+                    <span className={`status ${product.saleStatus === "discontinued" ? "cancelled" : product.approvalStatus || "approved"}`}>
+                      {product.saleStatus === "discontinued"
+                        ? "Discontinued"
+                        : product.approvalStatus || "approved"}
+                    </span>
+                    {product.approvalReason && <small>{product.approvalReason}</small>}
+                  </td>
                   <td>{product.catName || "—"}</td>
                   <td>
                     <div className="row-actions">
                       <button
                         className="secondary"
+                        disabled={product.saleStatus === "discontinued"}
                         onClick={() => startEdit(product)}
                       >
                         Edit
                       </button>
                       <button
                         className="danger"
+                        disabled={product.saleStatus === "discontinued"}
                         onClick={() => remove(product)}
                       >
                         Delete
@@ -670,6 +683,12 @@ const Products = () => {
               </button>
             </div>
             <div className="form-sections">
+              {editingId && (
+                <p className="notice">
+                  Saving changes will send this product back to admin for approval.
+                  It will not be visible to customers until it is approved again.
+                </p>
+              )}
               {formError && <p className="notice error">{formError}</p>}
               <div className="form-grid">
                 <label className="full">
@@ -776,32 +795,6 @@ const Products = () => {
                   <small className="muted">
                     Calculated automatically from price and old price.
                   </small>
-                </label>
-                <label>
-                  Rating
-                  <input
-                    type="number"
-                    min="0"
-                    max="5"
-                    step="0.5"
-                    value={form.rating}
-                    onChange={change("rating")}
-                  />
-                </label>
-                <label>
-                  Featured
-                  <select
-                    value={String(form.isFeatured)}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        isFeatured: event.target.value === "true",
-                      }))
-                    }
-                  >
-                    <option value="false">No</option>
-                    <option value="true">Yes</option>
-                  </select>
                 </label>
               </div>
 
@@ -941,6 +934,8 @@ const Products = () => {
 const Orders = () => {
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [confirmingId, setConfirmingId] = useState("");
   useEffect(() => {
     let active = true;
     request("/api/seller/orders").then((result) => {
@@ -952,6 +947,23 @@ const Orders = () => {
       active = false;
     };
   }, []);
+  const confirmOrder = async (orderId) => {
+    setError("");
+    setSuccess("");
+    setConfirmingId(orderId);
+    const result = await request(`/api/seller/orders/${orderId}/confirm`, {
+      method: "PUT",
+    });
+    if (result.success) {
+      setItems((current) =>
+        current.map((order) => (order._id === orderId ? result.data : order)),
+      );
+      setSuccess(result.message || "Order confirmed.");
+    } else {
+      setError(result.message || "Unable to confirm order.");
+    }
+    setConfirmingId("");
+  };
   return (
     <section className="panel">
       <div className="panel-head">
@@ -963,6 +975,7 @@ const Orders = () => {
         </div>
       </div>
       {error && <p className="notice error">{error}</p>}
+      {success && <p className="notice success">{success}</p>}
       {items.length ? (
         <div className="order-list">
           {items.map((order) => (
@@ -995,6 +1008,64 @@ const Orders = () => {
               <div className="order-total">
                 Seller total: <strong>{money(order.sellerTotal)}</strong>
               </div>
+              <details className="order-details">
+                <summary>View order details</summary>
+                <div className="order-details-grid">
+                  <section>
+                    <h4>Delivery address</h4>
+                    <strong>{order.customer?.name || "Customer"}</strong>
+                    <p>{order.deliveryAddress?.mobile || "No phone number"}</p>
+                    <p>
+                      {[
+                        order.deliveryAddress?.address_line1,
+                        order.deliveryAddress?.city,
+                        order.deliveryAddress?.state,
+                        order.deliveryAddress?.pincode,
+                        order.deliveryAddress?.country,
+                      ]
+                        .filter(Boolean)
+                        .join(", ") || "No delivery address"}
+                    </p>
+                  </section>
+                  <section>
+                    <h4>Order information</h4>
+                    <dl>
+                      <div><dt>Order ID</dt><dd>{order.orderId}</dd></div>
+                      <div><dt>Payment</dt><dd>{order.paymentMethod || "—"}</dd></div>
+                      <div><dt>Payment status</dt><dd>{order.paymentStatus || "pending"}</dd></div>
+                      <div><dt>Order status</dt><dd>{order.orderStatus}</dd></div>
+                      <div><dt>Placed at</dt><dd>{new Date(order.createdAt).toLocaleString()}</dd></div>
+                    </dl>
+                  </section>
+                </div>
+                <div className="order-detail-items">
+                  <h4>Your items in this order</h4>
+                  {order.items.map((item, index) => (
+                    <div className="order-detail-item" key={`${order._id}-detail-${item.productId}-${index}`}>
+                      <img src={item.image} alt={item.name} />
+                      <span>
+                        <strong>{item.name}</strong>
+                        <small>
+                          Quantity: {item.quantity}
+                          {item.size ? ` · Option: ${item.size}` : ""}
+                        </small>
+                      </span>
+                      <strong>{money(item.subTotal)}</strong>
+                    </div>
+                  ))}
+                </div>
+              </details>
+              {order.paymentMethod === "COD" && order.orderStatus === "pending" && (
+                <button
+                  type="button"
+                  disabled={confirmingId === order._id}
+                  onClick={() => confirmOrder(order._id)}
+                >
+                  {confirmingId === order._id
+                    ? "Confirming..."
+                    : "Confirm COD order"}
+                </button>
+              )}
             </article>
           ))}
         </div>
@@ -1020,6 +1091,9 @@ const Reviews = () => {
   const [rating, setRating] = useState("all");
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [drafts, setDrafts] = useState({});
+  const [replying, setReplying] = useState("");
   useEffect(() => {
     let active = true;
     request("/api/seller/reviews").then((result) => {
@@ -1037,6 +1111,39 @@ const Reviews = () => {
       `${review.productName} ${review.userName} ${review.comment}`.toLowerCase();
     return matchesRating && text.includes(query.trim().toLowerCase());
   });
+  const saveReply = async (review) => {
+    const reply = String(drafts[review._id] ?? review.sellerReply ?? "").trim();
+    if (!reply) {
+      setError("Please enter a reply.");
+      return;
+    }
+    setReplying(review._id);
+    setError("");
+    setSuccess("");
+    const result = await request(
+      `/api/seller/reviews/${review.productId}/${review._id}/reply`,
+      { method: "PUT", body: { reply } },
+    );
+    if (result.success) {
+      setData((current) => ({
+        ...current,
+        reviews: current.reviews.map((item) =>
+          item._id === review._id
+            ? { ...item, sellerReply: result.data.sellerReply, sellerRepliedAt: result.data.sellerRepliedAt }
+            : item,
+        ),
+      }));
+      setSuccess(
+        review.sellerReply
+          ? "Your reply was updated successfully."
+          : "Your reply was posted successfully.",
+      );
+      window.setTimeout(() => setSuccess(""), 3000);
+    } else {
+      setError(result.message || "Unable to save reply.");
+    }
+    setReplying("");
+  };
   return (
     <section className="panel">
       <div className="panel-head">
@@ -1046,6 +1153,7 @@ const Reviews = () => {
         </div>
       </div>
       {error && <p className="notice error">{error}</p>}
+      {success && <p className="notice success">{success}</p>}
       <div className="review-summary">
         <div className="average-rating">
           <strong>{data.summary.average.toFixed(1)}</strong>
@@ -1103,6 +1211,21 @@ const Reviews = () => {
                 <Stars value={review.rating} />
                 <p>{review.comment}</p>
                 <small>By {review.userName || "Customer"}</small>
+                <div className="seller-reply">
+                  <label>
+                    Your reply
+                    <textarea
+                      rows="2"
+                      maxLength="1000"
+                      placeholder="Reply publicly to this customer..."
+                      value={drafts[review._id] ?? review.sellerReply ?? ""}
+                      onChange={(event) => setDrafts((current) => ({ ...current, [review._id]: event.target.value }))}
+                    />
+                  </label>
+                  <button type="button" disabled={replying === review._id} onClick={() => saveReply(review)}>
+                    {replying === review._id ? "Saving..." : review.sellerReply ? "Update reply" : "Post reply"}
+                  </button>
+                </div>
               </div>
             </article>
           ))}
@@ -1294,10 +1417,11 @@ const SellerArea = () => {
   return (
     <Layout seller={state.seller}>
       <Routes>
-        <Route index element={<DashboardHome seller={state.seller} />} />
+        <Route path="dashboard" element={<DashboardHome seller={state.seller} />} />
         <Route path="products" element={<Products />} />
         <Route path="orders" element={<Orders />} />
         <Route path="reviews" element={<Reviews />} />
+        <Route path="messages" element={<Messages />} />
         <Route
           path="store"
           element={
@@ -1318,6 +1442,7 @@ const SellerArea = () => {
 
 const App = () => (
   <Routes>
+    <Route path="/" element={<Navigate to="/login" replace />} />
     <Route path="/login" element={<AuthCard mode="login" />} />
     <Route path="/register" element={<AuthCard mode="register" />} />
     <Route

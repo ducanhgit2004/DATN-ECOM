@@ -21,6 +21,10 @@ const Dashboard = () => {
   const [chart, setChart] = useState([]);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
+  const [productSales, setProductSales] = useState([]);
+  const [performanceSearch, setPerformanceSearch] = useState("");
+  const [performanceStatus, setPerformanceStatus] = useState("all");
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("");
   const [page, setPage] = useState(1);
@@ -39,6 +43,8 @@ const Dashboard = () => {
       if (!active) return;
       if (statsResult?.success) {
         setStats(statsResult.summary || {});
+        setTopProducts(statsResult.topProducts || []);
+        setProductSales(statsResult.productSales || []);
         const names = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
         setChart((statsResult.data || []).map((item, index) => ({
           name: names[index], users: item.totalUsers || 0, sales: item.totalSales || 0,
@@ -60,6 +66,28 @@ const Dashboard = () => {
     [products, category],
   );
   const pageProducts = filteredProducts.slice((page - 1) * perPage, page * perPage);
+  const productPerformance = useMemo(() => {
+    const salesMap = new Map(productSales.map((item) => [String(item._id), item]));
+    return products
+      .map((product) => {
+        const sales = salesMap.get(String(product._id));
+        return {
+          ...product,
+          unitsSold: Number(sales?.unitsSold || 0),
+          salesRevenue: Number(sales?.revenue || 0),
+          salesOrders: Number(sales?.orderCount || 0),
+          performance: Number(sales?.unitsSold || 0) > 0 ? "selling" : "no-sales",
+        };
+      })
+      .filter((product) => {
+        const query = performanceSearch.trim().toLowerCase();
+        const matchesSearch = !query || `${product.name} ${product.brand || ""} ${product.catName || ""}`
+          .toLowerCase()
+          .includes(query);
+        return matchesSearch && (performanceStatus === "all" || product.performance === performanceStatus);
+      })
+      .sort((a, b) => b.unitsSold - a.unitsSold || b.salesRevenue - a.salesRevenue);
+  }, [performanceSearch, performanceStatus, productSales, products]);
   const visibleIds = pageProducts.map((item) => item._id);
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.includes(id));
 
@@ -100,6 +128,92 @@ const Dashboard = () => {
     </div>
 
     <DashboardBoxes stats={stats} loading={loading} />
+
+    <div className="card my-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 p-5">
+        <div>
+          <h2 className="text-[18px] font-semibold">Best-Selling Products</h2>
+          <p className="mt-1 text-xs text-gray-500">Ranked by units sold over the last 30 days</p>
+        </div>
+        <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+          Top {topProducts.length}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[850px] text-left text-sm">
+          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <tr><th className="p-4">Rank</th><th>Product</th><th>Shop</th><th>Orders</th><th>Units Sold</th><th>Revenue</th><th>Stock</th><th>Sales Performance</th></tr>
+          </thead>
+          <tbody>
+            {loading ? <tr><td colSpan="8" className="p-8 text-center">Loading sales statistics...</td></tr> :
+              topProducts.length === 0 ? <tr><td colSpan="8" className="p-8 text-center text-gray-500">No sales data is available for the last 30 days.</td></tr> :
+              topProducts.map((product, index) => {
+                const maximum = Number(topProducts[0]?.unitsSold || 1);
+                const percentage = Math.max(4, Math.round((Number(product.unitsSold) / maximum) * 100));
+                return <tr key={product._id} className="border-t border-gray-100">
+                  <td className="p-4"><span className={`grid h-8 w-8 place-items-center rounded-full font-bold ${index < 3 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{index + 1}</span></td>
+                  <td><div className="flex w-[280px] items-center gap-3 py-2"><img src={product.image || "/Sample_User_Icon.png"} className="h-12 w-12 rounded-lg object-cover" alt="" /><div><b className="line-clamp-2 text-xs text-gray-800">{product.name}</b><small className="mt-1 block text-gray-400">{product.category || "Uncategorized"}</small></div></div></td>
+                  <td>{product.sellerName || "Admin"}</td>
+                  <td>{product.orderCount}</td>
+                  <td><b className="text-blue-600">{product.unitsSold}</b></td>
+                  <td><b className="text-green-600">{money(product.revenue)}</b></td>
+                  <td><span className={Number(product.stock) <= 5 ? "font-semibold text-red-500" : ""}>{product.stock}</span></td>
+                  <td><div className="h-2 w-28 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500" style={{ width: `${percentage}%` }} /></div></td>
+                </tr>;
+              })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div className="card my-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-gray-200 p-5">
+        <div>
+          <h2 className="text-[18px] font-semibold">Product Sales Performance</h2>
+          <p className="mt-1 text-xs text-gray-500">Detailed performance for every product over the last 30 days, including products with no sales.</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <input
+            value={performanceSearch}
+            onChange={(event) => setPerformanceSearch(event.target.value)}
+            placeholder="Search product..."
+            className="h-10 w-[230px] rounded-md border border-gray-200 px-3 text-sm outline-none focus:border-blue-500"
+          />
+          <Select size="small" className="w-[150px]" value={performanceStatus} onChange={(event) => setPerformanceStatus(event.target.value)}>
+            <MenuItem value="all">All Products</MenuItem>
+            <MenuItem value="selling">Selling</MenuItem>
+            <MenuItem value="no-sales">No Sales</MenuItem>
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-3 border-b bg-gray-50 p-4 sm:grid-cols-3">
+        <div className="rounded-lg border bg-white p-4"><small className="text-gray-500">Products Analyzed</small><b className="mt-1 block text-xl">{products.length}</b></div>
+        <div className="rounded-lg border bg-white p-4"><small className="text-gray-500">Products With Sales</small><b className="mt-1 block text-xl text-green-600">{products.filter((item) => productSales.some((sale) => String(sale._id) === String(item._id) && Number(sale.unitsSold) > 0)).length}</b></div>
+        <div className="rounded-lg border bg-white p-4"><small className="text-gray-500">Products With No Sales</small><b className="mt-1 block text-xl text-red-500">{products.filter((item) => !productSales.some((sale) => String(sale._id) === String(item._id) && Number(sale.unitsSold) > 0)).length}</b></div>
+      </div>
+      <div className="max-h-[620px] overflow-auto">
+        <table className="w-full min-w-[1050px] text-left text-sm">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500">
+            <tr><th className="p-4">Product</th><th>Category</th><th>Price</th><th>Orders</th><th>Units Sold</th><th>Revenue</th><th>Stock</th><th>Performance</th></tr>
+          </thead>
+          <tbody>
+            {productPerformance.map((product) => (
+              <tr key={product._id} className="border-t border-gray-100">
+                <td className="p-4"><div className="flex w-[300px] items-center gap-3"><img src={product.images?.[0] || "/Sample_User_Icon.png"} className="h-12 w-12 rounded-lg object-cover" alt="" /><div><b className="line-clamp-2 text-xs">{product.name}</b><small className="mt-1 block text-gray-400">{product.brand || "No brand"}</small></div></div></td>
+                <td>{product.catName || product.category?.name || "Uncategorized"}</td>
+                <td>{money(product.price)}</td>
+                <td>{product.salesOrders}</td>
+                <td><b className={product.unitsSold ? "text-blue-600" : "text-gray-400"}>{product.unitsSold}</b></td>
+                <td><b className={product.salesRevenue ? "text-green-600" : "text-gray-400"}>{money(product.salesRevenue)}</b></td>
+                <td><span className={Number(product.countInStock) <= 5 ? "font-semibold text-red-500" : ""}>{product.countInStock || 0}</span></td>
+                <td><span className={`rounded-full px-3 py-1 text-xs font-semibold ${product.performance === "selling" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>{product.performance === "selling" ? "Selling" : "No Sales"}</span></td>
+              </tr>
+            ))}
+            {!loading && productPerformance.length === 0 && <tr><td colSpan="8" className="p-10 text-center text-gray-500">No products match the selected filters.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
 
     <div className="card my-4 rounded-lg border border-gray-200 bg-white shadow-md">
       <div className="flex flex-wrap items-end justify-between gap-4 p-5">

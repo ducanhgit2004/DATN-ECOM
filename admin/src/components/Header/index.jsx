@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import Button from "@mui/material/Button";
 import Badge from "@mui/material/Badge";
 import Divider from "@mui/material/Divider";
@@ -12,7 +12,7 @@ import { FaRegBell } from "react-icons/fa";
 import { FaRegUser } from "react-icons/fa6";
 import { IoMdLogOut } from "react-icons/io";
 
-import { Link, Links, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { MyContext } from "../../App";
 import { fetchDataFromApi } from "../../utils/api";
@@ -29,11 +29,35 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
 const Header = () => {
   const [anchorMyAcc, setAnchorMyAcc] = useState(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [notificationAnchor, setNotificationAnchor] = useState(null);
+  const [notificationData, setNotificationData] = useState({
+    unreadCount: 0,
+    notifications: [],
+  });
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   const context = useContext(MyContext);
   const navigate = useNavigate();
 
   const openMyAcc = Boolean(anchorMyAcc);
+  const openNotifications = Boolean(notificationAnchor);
+
+  const loadNotifications = useCallback(async () => {
+    if (!localStorage.getItem("accesstoken")) return;
+    setNotificationsLoading(true);
+    const result = await fetchDataFromApi("/api/order/admin/notifications");
+    if (result?.success) setNotificationData(result.data);
+    setNotificationsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(loadNotifications, 0);
+    const interval = window.setInterval(loadNotifications, 60000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+    };
+  }, [loadNotifications]);
 
   const handleClickMyAcc = (event) => {
     setAnchorMyAcc(event.currentTarget);
@@ -107,11 +131,96 @@ const Header = () => {
       </div>
 
       <div className="part2 flex w-[40%] items-center justify-end gap-5">
-        <IconButton aria-label="notifications">
-          <StyledBadge badgeContent={4} color="secondary">
+        <IconButton
+          aria-label="notifications"
+          aria-controls={openNotifications ? "notification-menu" : undefined}
+          aria-haspopup="true"
+          onClick={(event) => {
+            setNotificationAnchor(event.currentTarget);
+            loadNotifications();
+          }}
+        >
+          <StyledBadge
+            badgeContent={notificationData.unreadCount}
+            max={99}
+            color="secondary"
+          >
             <FaRegBell />
           </StyledBadge>
         </IconButton>
+        <Menu
+          id="notification-menu"
+          anchorEl={notificationAnchor}
+          open={openNotifications}
+          onClose={() => setNotificationAnchor(null)}
+          transformOrigin={{ horizontal: "right", vertical: "top" }}
+          anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+          slotProps={{ paper: { sx: { width: 380, maxWidth: "calc(100vw - 24px)", mt: 1 } } }}
+        >
+          <div className="flex items-center justify-between px-4 py-2">
+            <div>
+              <h3 className="font-semibold text-gray-900">Notifications</h3>
+              <p className="text-xs text-gray-500">
+                {notificationData.unreadCount} items require attention
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadNotifications}
+              className="text-xs font-semibold text-blue-600"
+            >
+              Refresh
+            </button>
+          </div>
+          <Divider />
+          {notificationsLoading && !notificationData.notifications.length ? (
+            <p className="px-4 py-8 text-center text-sm text-gray-500">
+              Loading notifications...
+            </p>
+          ) : notificationData.notifications.length ? (
+            notificationData.notifications.map((notification) => (
+              <MenuItem
+                key={notification.id}
+                onClick={() => {
+                  setNotificationAnchor(null);
+                  navigate(notification.path);
+                }}
+                className="!items-start !gap-3 !whitespace-normal !px-4 !py-3"
+              >
+                <span
+                  className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                    notification.type === "order"
+                      ? "bg-blue-500"
+                      : notification.type === "seller"
+                        ? "bg-violet-500"
+                        : notification.type === "product"
+                          ? "bg-amber-500"
+                        : notification.type === "stock"
+                          ? "bg-orange-500"
+                          : notification.type === "support"
+                            ? "bg-rose-500"
+                          : "bg-emerald-500"
+                  }`}
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-gray-900">
+                    {notification.title}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-gray-500">
+                    {notification.message}
+                  </span>
+                </span>
+                <span className="ml-auto rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-600">
+                  {notification.count}
+                </span>
+              </MenuItem>
+            ))
+          ) : (
+            <p className="px-4 py-8 text-center text-sm text-gray-500">
+              Everything is up to date.
+            </p>
+          )}
+        </Menu>
 
         {context?.isLogin === true ? (
           <div className="relative">

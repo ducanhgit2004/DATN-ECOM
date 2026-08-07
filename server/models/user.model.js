@@ -25,8 +25,9 @@ const userSchema = mongoose.Schema(
       default: "",
     },
     mobile: {
-      type: Number,
-      default: null,
+      type: String,
+      default: "",
+      trim: true,
     },
     verify_email: {
       type: Boolean,
@@ -44,7 +45,7 @@ const userSchema = mongoose.Schema(
     address_details: [
       {
         type: mongoose.Schema.ObjectId,
-        ref: "address",
+        ref: "Address",
       },
     ],
     shopping_cart: [

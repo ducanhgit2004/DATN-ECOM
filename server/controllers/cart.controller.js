@@ -1,5 +1,6 @@
 import CartProductModel from "../models/cartproduct.model.js";
 import UserModel from "../models/user.model.js";
+import ProductModel from "../models/product.model.js";
 
 export const addToCartItemController = async (request, response) => {
   try {
@@ -9,6 +10,18 @@ export const addToCartItemController = async (request, response) => {
     if (!productId) {
       return response.status(400).json({
         message: "Provide productId",
+        error: true,
+        success: false,
+      });
+    }
+    const product = await ProductModel.findOne({
+      _id: productId,
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
+    }).select("_id");
+    if (!product) {
+      return response.status(409).json({
+        message: "This product is no longer available",
         error: true,
         success: false,
       });
@@ -59,6 +72,13 @@ export const addToCartItemController = async (request, response) => {
       success: true,
     });
   } catch (error) {
+    if (error?.code === 11000) {
+      return response.status(409).json({
+        message: "This product variant is already in the cart",
+        error: true,
+        success: false,
+      });
+    }
     return response.status(500).json({
       message: error.message || error,
       error: true,

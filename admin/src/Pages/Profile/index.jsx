@@ -16,6 +16,7 @@ import Radio from "@mui/material/Radio";
 
 import { MyContext } from "../../App";
 import { fetchDataFromApi } from "../../utils/api";
+import { isValidPhone, normalizePhone } from "../../utils/phone";
 
 const DEFAULT_AVATAR = "/Sample_User_Icon.png";
 
@@ -333,7 +334,7 @@ const Profile = () => {
 
     if (
       formData.mobile.trim() &&
-      !/^[0-9+\s-]{9,15}$/.test(formData.mobile.trim())
+      !isValidPhone(formData.mobile)
     ) {
       context?.alertBox?.("error", "Số điện thoại không hợp lệ");
       return false;
@@ -706,8 +707,7 @@ const Profile = () => {
                   onChange={(value) => {
                     setFormData((previousData) => ({
                       ...previousData,
-                      mobile:
-                        typeof value === "string" ? value : String(value ?? ""),
+                      mobile: normalizePhone(value),
                     }));
                   }}
                   inputClassName="!w-full"

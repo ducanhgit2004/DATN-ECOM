@@ -44,6 +44,8 @@ import ChangePassword from "./Pages/ChangePassword";
 import Profile from "./Pages/Profile";
 import AddAddress from "./Pages/Address/addAddress";
 import Sellers from "./Pages/Sellers";
+import Reviews from "./Pages/Reviews";
+import Support from "./Pages/Support";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -426,6 +428,32 @@ function App() {
             </div>
           </section>
         </>
+      ),
+    },
+    {
+      path: "/reviews",
+      loader: requireAdminSession,
+      element: (
+        <section className="main">
+          <Header />
+          <div className="contentMain flex">
+            <div className={`overflow-hidden sidebarWrapper ${isSidebarOpen ? "w-[15%]" : "w-[0px] opacity-0"} transition-all`}><Sidebar /></div>
+            <div className={`contentRight py-4 px-5 ${isSidebarOpen ? "w-[82%]" : "w-[100%]"} transition-all`}><Reviews /></div>
+          </div>
+        </section>
+      ),
+    },
+    {
+      path: "/support",
+      loader: requireAdminSession,
+      element: (
+        <section className="main">
+          <Header />
+          <div className="contentMain flex">
+            <div className={`overflow-hidden sidebarWrapper ${isSidebarOpen ? "w-[15%]" : "w-[0px] opacity-0"} transition-all`}><Sidebar /></div>
+            <div className={`contentRight py-4 px-5 ${isSidebarOpen ? "w-[82%]" : "w-[100%]"} transition-all`}><Support /></div>
+          </div>
+        </section>
       ),
     },
     {

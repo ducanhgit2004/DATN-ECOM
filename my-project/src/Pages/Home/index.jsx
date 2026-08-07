@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import HomeSlider from "../../components/HomeSlider";
 import HomeCatSlider from "../../components/HomeCatSlider";
 import AdsBannerSlider from "../../components/AdsBannerSlider";
@@ -13,10 +13,38 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 
 import { MyContext } from "../../App";
+import { fetchDataFromApi } from "../../utils/api";
 
 const Home = () => {
   const [value, setValue] = React.useState(0);
-  const { catData, products } = useContext(MyContext);
+  const { catData, products, isLogin } = useContext(MyContext);
+  const [recommendations, setRecommendations] = useState([]);
+  const [recommendationMode, setRecommendationMode] = useState("popular");
+
+  useEffect(() => {
+    let active = true;
+    const loadRecommendations = () => {
+      const recent = JSON.parse(
+        localStorage.getItem("novacartRecentProducts") || "[]",
+      );
+      const query = recent.length
+        ? `?limit=12&recent=${encodeURIComponent(recent.join(","))}`
+        : "?limit=12";
+      fetchDataFromApi(`/api/product/recommendations/for-you${query}`).then(
+        (result) => {
+          if (!active || !result?.success) return;
+          setRecommendations(result.data || []);
+          setRecommendationMode(result.personalized ? "personalized" : "popular");
+        },
+      );
+    };
+    loadRecommendations();
+    window.addEventListener("recommendations-updated", loadRecommendations);
+    return () => {
+      active = false;
+      window.removeEventListener("recommendations-updated", loadRecommendations);
+    };
+  }, [isLogin]);
 
   const handleChange = (event, newValue) => {
     setValue(newValue);
@@ -39,6 +67,22 @@ const Home = () => {
       </section>
 
       <HomeCatSlider />
+
+      <section className="bg-[#fff8f8] py-8">
+        <div className="container">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-[22px] font-[600]">Recommended For You</h2>
+              <p className="text-[14px] text-gray-500">
+                {recommendationMode === "personalized"
+                  ? "Selected from your recent interests, cart, wishlist and purchases."
+                  : "Start viewing products to receive recommendations tailored to you."}
+              </p>
+            </div>
+          </div>
+          <ProductsSlider items={6} products={recommendations} />
+        </div>
+      </section>
 
       <section className="bg-white py-8">
         <div className="container">
@@ -94,7 +138,7 @@ const Home = () => {
 
             <div className="col2">
               <p className="mb-0 font-[500]">
-                Free shipping on your first order and over $50.00
+                Free shipping on orders from $200.00
               </p>
             </div>
 

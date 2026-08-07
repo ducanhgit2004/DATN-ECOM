@@ -20,7 +20,7 @@ const CartPage = () => {
     return total + price * quantity;
   }, 0);
 
-  const shipping = subtotal > 0 ? 7 : 0;
+  const shipping = subtotal > 0 && subtotal < 200 ? 7 : 0;
   const total = subtotal + shipping;
 
   return (
@@ -63,7 +63,9 @@ const CartPage = () => {
 
             <p className="flex items-center justify-between">
               <span className="text-[14px] font-[500]">Shipping</span>
-              <span className="font-bold">Free</span>
+              <span className="font-bold">
+                {subtotal >= 200 ? "Free" : money(shipping)}
+              </span>
             </p>
 
             <p className="flex items-center justify-between">

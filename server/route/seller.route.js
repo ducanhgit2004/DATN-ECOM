@@ -6,10 +6,12 @@ import {
   deleteSellerProduct,
   getSellerDashboard,
   getSellerOrders,
+  confirmSellerCodOrder,
   getSellerProducts,
   getPublicStore,
   searchPublicStores,
   getSellerReviews,
+  replyToSellerReview,
   getSellerStore,
   updateSellerProduct,
   updateSellerStore,
@@ -28,7 +30,9 @@ sellerRouter.post("/products", createSellerProduct);
 sellerRouter.put("/products/:productId", updateSellerProduct);
 sellerRouter.delete("/products/:productId", deleteSellerProduct);
 sellerRouter.get("/orders", getSellerOrders);
+sellerRouter.put("/orders/:orderId/confirm", confirmSellerCodOrder);
 sellerRouter.get("/reviews", getSellerReviews);
+sellerRouter.put("/reviews/:productId/:reviewId/reply", replyToSellerReview);
 sellerRouter.get("/store", getSellerStore);
 sellerRouter.put("/store", updateSellerStore);
 sellerRouter.post("/store/upload-image", upload.single("image"), uploadSellerStoreImage);

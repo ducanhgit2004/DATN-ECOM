@@ -9,6 +9,7 @@ import DialogActions from "@mui/material/DialogActions";
 import Radio from "@mui/material/Radio";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
+import { isValidPhone, normalizePhone } from "../../utils/phone";
 import { MyContext } from "../../App";
 import { MdDelete, MdEdit } from "react-icons/md";
 
@@ -164,7 +165,7 @@ const Address = () => {
   const handlePhoneChange = (value) => {
     setFormData((prev) => ({
       ...prev,
-      phone: value,
+      phone: normalizePhone(value),
     }));
   };
 
@@ -178,6 +179,10 @@ const Address = () => {
       !formData.postalCode
     ) {
       context?.alertBox?.("error", "Please fill in all required fields");
+      return;
+    }
+    if (!isValidPhone(formData.phone)) {
+      context?.alertBox?.("error", "Phone number must contain 9 to 15 digits.");
       return;
     }
 

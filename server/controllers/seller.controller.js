@@ -58,7 +58,11 @@ export async function getPublicStore(request, response) {
         success: false,
       });
     }
-    const products = await ProductModel.find({ sellerId: seller._id })
+    const products = await ProductModel.find({
+      sellerId: seller._id,
+      approvalStatus: { $nin: ["pending", "rejected"] },
+      saleStatus: { $ne: "discontinued" },
+    })
       .sort({ createdAt: -1 })
       .populate("category");
     return response.json({
@@ -366,8 +370,6 @@ export async function createSellerProduct(request, response) {
       thirdsubCatName = "",
       thirdsubCatId = "",
       category = null,
-      rating = 0,
-      isFeatured = false,
       productRam = [],
       size = [],
       productWeight = [],
@@ -404,6 +406,8 @@ export async function createSellerProduct(request, response) {
       : normalizedVariants.reduce((sum, item) => sum + item.stock, 0);
     const product = await ProductModel.create({
       sellerId: request.userId,
+      approvalStatus: "pending",
+      approvalReason: "",
       name: name.trim(),
       description: description.trim(),
       images: images.map(String).filter(Boolean),
@@ -418,13 +422,15 @@ export async function createSellerProduct(request, response) {
       thirdsubCat,
       thirdsubCatName,
       thirdsubCatId,
-      category: mongoose.isValidObjectId(category || catId) ? category || catId : undefined,
+      category: [thirdsubCatId, subCatId, category, catId].find((id) =>
+        mongoose.isValidObjectId(id),
+      ),
       countInStock: normalizedStock,
       inventoryType: normalizedInventoryType,
       inventoryVariants: normalizedVariants,
-      rating: Number(rating) || 0,
+      rating: 0,
       discount: Number(discount) || 0,
-      isFeatured: Boolean(isFeatured),
+      isFeatured: false,
       bannerEnabled: false,
       bannerImage: "",
       bannerSubtitle: "",
@@ -435,7 +441,7 @@ export async function createSellerProduct(request, response) {
       productWeight: Array.isArray(productWeight) ? productWeight : [],
     });
     return response.status(201).json({
-      message: "Product created",
+      message: "Product submitted for admin approval",
       data: product,
       error: false,
       success: true,
@@ -452,7 +458,7 @@ export async function updateSellerProduct(request, response) {
       "name", "description", "images", "brand", "price", "oldPrice",
       "countInStock", "discount", "catName", "catId", "subCat", "subCatName",
       "subCatId", "thirdsubCat", "thirdsubCatName", "thirdsubCatId",
-      "category", "rating", "isFeatured", "productRam", "size", "productWeight",
+      "category", "productRam", "size", "productWeight",
       "inventoryType", "inventoryVariants",
     ];
     const updates = {};
@@ -478,8 +484,16 @@ export async function updateSellerProduct(request, response) {
         );
       }
     }
+    updates.approvalStatus = "pending";
+    updates.approvalReason = "";
+    updates.approvedAt = null;
+    updates.approvedBy = null;
     const product = await ProductModel.findOneAndUpdate(
-      { _id: request.params.productId, sellerId: request.userId },
+      {
+        _id: request.params.productId,
+        sellerId: request.userId,
+        saleStatus: { $ne: "discontinued" },
+      },
       updates,
       { new: true, runValidators: true },
     );
@@ -491,7 +505,7 @@ export async function updateSellerProduct(request, response) {
       });
     }
     return response.json({
-      message: "Product updated",
+      message: "Product updated and submitted for admin approval",
       data: product,
       error: false,
       success: true,
@@ -504,7 +518,7 @@ export async function updateSellerProduct(request, response) {
 export async function deleteSellerProduct(request, response) {
   try {
     await requireApprovedSeller(request.userId);
-    const product = await ProductModel.findOneAndDelete({
+    const product = await ProductModel.findOne({
       _id: request.params.productId,
       sellerId: request.userId,
     });
@@ -515,8 +529,25 @@ export async function deleteSellerProduct(request, response) {
         success: false,
       });
     }
+    const hasOrderHistory = await OrderModel.exists({
+      "items.productId": product._id,
+    });
+    if (hasOrderHistory) {
+      product.saleStatus = "discontinued";
+      product.discontinuedAt = new Date();
+      await product.save();
+      return response.json({
+        message: "Product has order history and was marked as discontinued",
+        data: product,
+        discontinued: true,
+        error: false,
+        success: true,
+      });
+    }
+    await ProductModel.deleteOne({ _id: product._id });
     return response.json({
       message: "Product deleted",
+      discontinued: false,
       error: false,
       success: true,
     });
@@ -545,6 +576,64 @@ export async function getSellerOrders(request, response) {
     return response.json({ data: scoped, error: false, success: true });
   } catch (error) {
     return sendError(response, error, "Unable to load seller orders");
+  }
+}
+
+export async function confirmSellerCodOrder(request, response) {
+  try {
+    await requireApprovedSeller(request.userId);
+    if (!mongoose.isValidObjectId(request.params.orderId)) {
+      return response.status(400).json({
+        message: "Invalid order id",
+        error: true,
+        success: false,
+      });
+    }
+
+    const order = await OrderModel.findOne({
+      _id: request.params.orderId,
+      "items.sellerId": request.userId,
+    });
+    if (!order) {
+      return response.status(404).json({
+        message: "Order not found or does not contain your products",
+        error: true,
+        success: false,
+      });
+    }
+    if (order.paymentMethod !== "COD") {
+      return response.status(409).json({
+        message: "Only cash on delivery orders require seller confirmation",
+        error: true,
+        success: false,
+      });
+    }
+    if (order.orderStatus !== "pending") {
+      return response.status(409).json({
+        message: "Only pending orders can be confirmed",
+        error: true,
+        success: false,
+      });
+    }
+
+    order.orderStatus = "confirmed";
+    await order.save();
+    const data = order.toObject();
+    const items = data.items.filter(
+      (item) => String(item.sellerId) === String(request.userId),
+    );
+    return response.json({
+      message: "Cash on delivery order confirmed",
+      data: {
+        ...data,
+        items,
+        sellerTotal: items.reduce((sum, item) => sum + item.subTotal, 0),
+      },
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return sendError(response, error, "Unable to confirm order");
   }
 }
 
@@ -585,6 +674,39 @@ export async function getSellerReviews(request, response) {
     });
   } catch (error) {
     return sendError(response, error, "Unable to load seller reviews");
+  }
+}
+
+export async function replyToSellerReview(request, response) {
+  try {
+    await requireApprovedSeller(request.userId);
+    const { productId, reviewId } = request.params;
+    const reply = String(request.body?.reply || "").trim();
+    if (!mongoose.isValidObjectId(productId) || !mongoose.isValidObjectId(reviewId)) {
+      return response.status(400).json({ message: "Invalid product or review id", error: true, success: false });
+    }
+    if (!reply || reply.length > 1000) {
+      return response.status(400).json({ message: "Reply must contain between 1 and 1000 characters", error: true, success: false });
+    }
+    const product = await ProductModel.findOne({ _id: productId, sellerId: request.userId });
+    if (!product) {
+      return response.status(404).json({ message: "Product not found", error: true, success: false });
+    }
+    const review = product.reviews.id(reviewId);
+    if (!review) {
+      return response.status(404).json({ message: "Review not found", error: true, success: false });
+    }
+    review.sellerReply = reply;
+    review.sellerRepliedAt = new Date();
+    await product.save();
+    return response.json({
+      message: "Reply saved successfully",
+      data: review,
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return sendError(response, error, "Unable to reply to review");
   }
 }
 

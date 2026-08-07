@@ -5,7 +5,7 @@ import { FaRegUser } from "react-icons/fa";
 import { IoBagCheckOutline } from "react-icons/io5";
 import { IoMdHeartEmpty } from "react-icons/io";
 import { IoIosLogOut } from "react-icons/io";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import Button from "@mui/material/Button";
 import { MyContext } from "../../App";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -17,6 +17,12 @@ const AccountSidebar = () => {
   const [avatarUrl, setAvatarUrl] = useState("dichead.jpg");
 
   const context = useContext(MyContext);
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await context.logout();
+    navigate("/", { replace: true });
+  };
 
   useEffect(() => {
     if (context?.userData?.avatar) {
@@ -172,11 +178,13 @@ const AccountSidebar = () => {
           </NavLink>
         </li>
         <li className="w-full">
-          <NavLink to="/profile" exact={true} activeClassName="isActive">
-            <Button className=" w-full !text-left !px-5 !py-2 !justify-start !capitalize !text-[rgba(0,0,0,0.8)] !rounded-none flex items-center gap-2">
-              <IoIosLogOut className="text-[20px]" /> Logout
-            </Button>
-          </NavLink>
+          <Button
+            type="button"
+            onClick={handleLogout}
+            className=" w-full !text-left !px-5 !py-2 !justify-start !capitalize !text-[rgba(0,0,0,0.8)] !rounded-none flex items-center gap-2"
+          >
+            <IoIosLogOut className="text-[20px]" /> Logout
+          </Button>
         </li>
       </ul>
     </div>

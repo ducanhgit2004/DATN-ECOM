@@ -5,8 +5,12 @@ import CartProductModel from "../models/cartproduct.model.js";
 import OrderModel from "../models/order.model.js";
 import ProductModel from "../models/product.model.js";
 import UserModel from "../models/user.model.js";
+import SupportTicketModel from "../models/supportTicket.model.js";
 
 const SHIPPING_FEE = 7;
+const FREE_SHIPPING_MINIMUM = 200;
+const calculateShipping = (subtotal) =>
+  subtotal > 0 && subtotal < FREE_SHIPPING_MINIMUM ? SHIPPING_FEE : 0;
 
 const makeOrderId = () =>
   `ORD-${Date.now()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
@@ -50,6 +54,10 @@ const buildCheckoutData = async (userId, addressId) => {
 
   const unavailableItem = cartItems.find((item) => {
     const product = item.productId;
+    if (
+      ["pending", "rejected"].includes(product.approvalStatus) ||
+      product.saleStatus === "discontinued"
+    ) return true;
     if (product.inventoryType === "none") return Number(product.countInStock) < item.quantity;
     const variant = product.inventoryVariants?.find(
       (entry) => String(entry.value) === String(item.size),
@@ -82,7 +90,7 @@ const buildCheckoutData = async (userId, addressId) => {
     cartItems,
     items,
     subTotalAmt,
-    shippingAmt: subTotalAmt > 0 ? SHIPPING_FEE : 0,
+    shippingAmt: calculateShipping(subTotalAmt),
   };
 };
 
@@ -90,9 +98,15 @@ const reserveStock = async (items) => {
   const reservedItems = [];
   for (const item of items) {
     const product = await ProductModel.findById(item.productId).select(
-      "name inventoryType countInStock inventoryVariants",
+      "name inventoryType countInStock inventoryVariants approvalStatus saleStatus",
     );
-    if (!product) throw Object.assign(new Error(`${item.name} is unavailable`), { status: 409 });
+    if (
+      !product ||
+      ["pending", "rejected"].includes(product.approvalStatus) ||
+      product.saleStatus === "discontinued"
+    ) {
+      throw Object.assign(new Error(`${item.name} is unavailable`), { status: 409 });
+    }
     const simple = product.inventoryType === "none";
     const filter = simple
       ? { _id: product._id, countInStock: { $gte: item.quantity } }
@@ -626,7 +640,7 @@ export const createOrderController = async (request, response) => {
       };
     });
     const subTotalAmt = items.reduce((sum, item) => sum + item.subTotal, 0);
-    const shippingAmt = subTotalAmt > 0 ? SHIPPING_FEE : 0;
+    const shippingAmt = calculateShipping(subTotalAmt);
 
     const order = await OrderModel.create({
       userId,
@@ -773,6 +787,110 @@ export const getAdminOrdersController = async (request, response) => {
   }
 };
 
+export const getAdminNotificationsController = async (request, response) => {
+  try {
+    await ensureAdmin(request.userId);
+    const reviewSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [
+      pendingOrders,
+      pendingSellers,
+      pendingProducts,
+      lowStock,
+      recentReviews,
+      openSupportTickets,
+    ] =
+      await Promise.all([
+        OrderModel.countDocuments({
+          orderStatus: { $in: ["pending", "confirmed", "processing"] },
+        }),
+        UserModel.countDocuments({
+          role: "SELLER",
+          sellerApprovalStatus: "pending",
+        }),
+        ProductModel.countDocuments({
+          sellerId: { $ne: null },
+          approvalStatus: "pending",
+        }),
+        ProductModel.countDocuments({
+          countInStock: { $lte: 5 },
+          approvalStatus: { $nin: ["pending", "rejected"] },
+        }),
+        ProductModel.aggregate([
+          { $unwind: "$reviews" },
+          { $match: { "reviews.createdAt": { $gte: reviewSince } } },
+          { $count: "total" },
+        ]),
+        SupportTicketModel.countDocuments({ status: "open" }),
+      ]);
+    const reviewCount = recentReviews[0]?.total || 0;
+    const notifications = [
+      {
+        id: "orders",
+        type: "order",
+        title: "Orders require attention",
+        message: `${pendingOrders} orders are pending or being processed.`,
+        count: pendingOrders,
+        path: "/orders",
+      },
+      {
+        id: "sellers",
+        type: "seller",
+        title: "Seller applications",
+        message: `${pendingSellers} seller applications are waiting for review.`,
+        count: pendingSellers,
+        path: "/sellers",
+      },
+      {
+        id: "products-awaiting-approval",
+        type: "product",
+        title: "Seller products awaiting approval",
+        message: `${pendingProducts} seller products were submitted for review.`,
+        count: pendingProducts,
+        path: "/products",
+      },
+      {
+        id: "stock",
+        type: "stock",
+        title: "Low-stock products",
+        message: `${lowStock} products have five units or fewer remaining.`,
+        count: lowStock,
+        path: "/products",
+      },
+      {
+        id: "reviews",
+        type: "review",
+        title: "New customer reviews",
+        message: `${reviewCount} reviews were submitted in the last 7 days.`,
+        count: reviewCount,
+        path: "/reviews",
+      },
+      {
+        id: "support",
+        type: "support",
+        title: "Open support requests",
+        message: `${openSupportTickets} customer requests are waiting for a response.`,
+        count: openSupportTickets,
+        path: "/support",
+      },
+    ].filter((item) => item.count > 0);
+    return response.json({
+      data: {
+        unreadCount: notifications.reduce((sum, item) => sum + item.count, 0),
+        notifications,
+        updatedAt: new Date(),
+      },
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    return response.status(error.status || 500).json({
+      message: error.message || "Unable to load notifications",
+      error: true,
+      success: false,
+    });
+  }
+};
+
 export const getAdminDashboardStatsController = async (request, response) => {
   try {
     await ensureAdmin(request.userId);
@@ -790,8 +908,10 @@ export const getAdminDashboardStatsController = async (request, response) => {
     const startDate = new Date(Date.UTC(year, 0, 1));
     const endDate = new Date(Date.UTC(year + 1, 0, 1));
     const dateRange = { $gte: startDate, $lt: endDate };
+    const trendingSince = new Date();
+    trendingSince.setUTCDate(trendingSince.getUTCDate() - 30);
 
-    const [ordersByMonth, usersByMonth, totalProducts, orderSummary] = await Promise.all([
+    const [ordersByMonth, usersByMonth, totalProducts, orderSummary, topProducts] = await Promise.all([
       OrderModel.aggregate([
         { $match: { createdAt: dateRange, orderStatus: { $ne: "cancelled" } } },
         {
@@ -818,6 +938,62 @@ export const getAdminDashboardStatsController = async (request, response) => {
           },
         },
       ]),
+      OrderModel.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: trendingSince },
+            orderStatus: { $in: ["confirmed", "processing", "shipped", "delivered"] },
+            paymentStatus: { $ne: "failed" },
+          },
+        },
+        { $unwind: "$items" },
+        {
+          $group: {
+            _id: "$items.productId",
+            name: { $last: "$items.name" },
+            image: { $last: "$items.image" },
+            sellerId: { $last: "$items.sellerId" },
+            unitsSold: { $sum: "$items.quantity" },
+            revenue: { $sum: "$items.subTotal" },
+            orderIds: { $addToSet: "$_id" },
+          },
+        },
+        { $sort: { unitsSold: -1, revenue: -1 } },
+        {
+          $lookup: {
+            from: "products",
+            localField: "_id",
+            foreignField: "_id",
+            as: "product",
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "sellerId",
+            foreignField: "_id",
+            as: "seller",
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            image: 1,
+            unitsSold: 1,
+            revenue: { $round: ["$revenue", 2] },
+            orderCount: { $size: "$orderIds" },
+            stock: { $ifNull: [{ $arrayElemAt: ["$product.countInStock", 0] }, 0] },
+            category: { $ifNull: [{ $arrayElemAt: ["$product.catName", 0] }, ""] },
+            sellerName: {
+              $ifNull: [
+                { $arrayElemAt: ["$seller.storeName", 0] },
+                { $arrayElemAt: ["$seller.name", 0] },
+              ],
+            },
+          },
+        },
+      ]),
     ]);
 
     const orderMap = new Map(ordersByMonth.map((item) => [item._id, item]));
@@ -841,6 +1017,13 @@ export const getAdminDashboardStatsController = async (request, response) => {
         revenue: Number((orderSummary[0]?.revenue || 0).toFixed(2)),
         totalProducts,
       },
+      topProducts: topProducts.slice(0, 8),
+      productSales: topProducts,
+      topProductsPeriod: {
+        from: trendingSince,
+        to: new Date(),
+        days: 30,
+      },
       error: false,
       success: true,
     });
@@ -857,10 +1040,9 @@ export const updateAdminOrderStatusController = async (request, response) => {
   try {
     await ensureAdmin(request.userId);
     const { orderStatus } = request.body || {};
-    const allowedStatuses = ["pending", "confirmed", "delivered"];
-    if (!allowedStatuses.includes(orderStatus)) {
+    if (orderStatus !== "delivered") {
       return response.status(400).json({
-        message: "Order status must be pending, confirmed, or delivered",
+        message: "Admins can only mark orders as delivered",
         error: true,
         success: false,
       });
@@ -882,17 +1064,9 @@ export const updateAdminOrderStatusController = async (request, response) => {
       });
     }
 
-    const currentRank = {
-      pending: 0,
-      confirmed: 1,
-      processing: 1,
-      shipped: 1,
-      delivered: 2,
-    }[order.orderStatus];
-    const nextRank = { pending: 0, confirmed: 1, delivered: 2 }[orderStatus];
-    if (order.orderStatus === "cancelled" || nextRank < currentRank) {
+    if (!["confirmed", "processing", "shipped", "delivered"].includes(order.orderStatus)) {
       return response.status(409).json({
-        message: "An order cannot be moved back to an earlier status",
+        message: "The seller must confirm the order before it can be delivered",
         error: true,
         success: false,
       });

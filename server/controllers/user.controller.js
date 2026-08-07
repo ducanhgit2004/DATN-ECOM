@@ -12,6 +12,7 @@ import generatedRefreshToken from "../utils/generatedRefreshToken.js";
 import { v2 as cloudinary } from "cloudinary";
 import fs, { access } from "fs";
 import verifyFirebaseIdToken from "../utils/verifyFirebaseIdToken.js";
+import { isValidPhone, normalizePhone } from "../utils/phone.js";
 
 cloudinary.config({
   cloud_name: process.env.cloudinary_Config_Cloud_Name,
@@ -567,6 +568,14 @@ export async function updateUserDetials(request, response) {
     const userId = request.userId;
     const { name, email, mobile, password } = request.body;
 
+    if (mobile != null && mobile !== "" && !isValidPhone(mobile)) {
+      return response.status(400).json({
+        message: "Phone number must contain 9 to 15 digits",
+        error: true,
+        success: false,
+      });
+    }
+
     const userExist = await UserModel.findById(userId);
 
     if (!userExist) {
@@ -610,7 +619,7 @@ export async function updateUserDetials(request, response) {
       {
         name: name || userExist.name,
 
-        mobile: mobile || userExist.mobile,
+        mobile: mobile ? normalizePhone(mobile) : userExist.mobile,
 
         email: email || userExist.email,
 

@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import { useContext } from "react";
 import { Link } from "react-router-dom";
 import { MdDeleteOutline } from "react-icons/md";
 import Button from "@mui/material/Button";
@@ -19,7 +19,7 @@ const CartPanel = () => {
     return total + price * quantity;
   }, 0);
 
-  const shipping = subtotal > 0 ? 7 : 0;
+  const shipping = subtotal > 0 && subtotal < 200 ? 7 : 0;
   const total = subtotal + shipping;
 
   return (
@@ -94,7 +94,9 @@ const CartPanel = () => {
 
           <div className="flex items-center justify-between w-full">
             <span className="text-[14px] font-[600]">Shipping</span>
-            <span className="text-[#ff5252] font-bold">{money(shipping)}</span>
+            <span className="text-[#ff5252] font-bold">
+              {subtotal >= 200 ? "Free" : money(shipping)}
+            </span>
           </div>
         </div>
 
@@ -107,10 +109,18 @@ const CartPanel = () => {
           <br />
 
           <div className="flex items-center justify-between w-full gap-5">
-            <Link to="/cart" className="w-[50%] d-block">
+            <Link
+              to="/cart"
+              className="w-[50%] d-block"
+              onClick={() => context?.setOpenCartPanel?.(false)}
+            >
               <Button className="btn-org btn-lg w-full">View Cart</Button>
             </Link>
-            <Link to="/checkout" className="w-[50%] d-block">
+            <Link
+              to="/checkout"
+              className="w-[50%] d-block"
+              onClick={() => context?.setOpenCartPanel?.(false)}
+            >
               <Button className="btn-org btn-border btn-lg w-full">
                 Checkout
               </Button>

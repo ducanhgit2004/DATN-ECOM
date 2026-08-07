@@ -1,5 +1,6 @@
 import AddressModel from "../models/address.model.js";
 import UserModel from "../models/user.model.js";
+import { isValidPhone, normalizePhone } from "../utils/phone.js";
 
 export const addAddressController = async (request, response) => {
   try {
@@ -22,6 +23,13 @@ export const addAddressController = async (request, response) => {
         success: false,
       });
     }
+    if (!isValidPhone(mobile)) {
+      return response.status(400).json({
+        message: "Phone number must contain 9 to 15 digits",
+        error: true,
+        success: false,
+      });
+    }
 
     const address = new AddressModel({
       address_line1,
@@ -29,7 +37,7 @@ export const addAddressController = async (request, response) => {
       state,
       pincode,
       country,
-      mobile,
+      mobile: normalizePhone(mobile),
       status,
       userId,
     });
@@ -185,6 +193,13 @@ export const updateAddressController = async (request, response) => {
         success: false,
       });
     }
+    if (!isValidPhone(mobile)) {
+      return response.status(400).json({
+        message: "Phone number must contain 9 to 15 digits",
+        error: true,
+        success: false,
+      });
+    }
 
     const address = await AddressModel.findOne({ _id: addressId, userId });
 
@@ -204,7 +219,7 @@ export const updateAddressController = async (request, response) => {
         state,
         pincode,
         country,
-        mobile,
+        mobile: normalizePhone(mobile),
         status: status ?? address.status,
       },
       { new: true },

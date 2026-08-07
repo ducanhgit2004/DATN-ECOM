@@ -94,7 +94,7 @@ const Login = () => {
     e.preventDefault();
     setError("");
     if (!formFields.email || !formFields.password) {
-      setError("Vui lòng nhập email và mật khẩu.");
+      setError("Please provide email and password.");
       return;
     }
 

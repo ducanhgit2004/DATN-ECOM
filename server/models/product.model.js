@@ -8,6 +8,26 @@ const productSchema = mongoose.Schema(
       default: null,
       index: true,
     },
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "approved",
+      index: true,
+    },
+    saleStatus: {
+      type: String,
+      enum: ["active", "discontinued"],
+      default: "active",
+      index: true,
+    },
+    discontinuedAt: { type: Date, default: null },
+    approvalReason: { type: String, default: "", trim: true },
+    approvedAt: { type: Date, default: null },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     name: {
       type: String,
       required: true,
@@ -39,12 +59,14 @@ const productSchema = mongoose.Schema(
       default: "",
     },
     catId: {
-      type: String,
-      default: "",
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
     },
     subCatId: {
-      type: String,
-      default: "",
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
     },
     subCat: {
       type: String,
@@ -63,8 +85,9 @@ const productSchema = mongoose.Schema(
       default: "",
     },
     thirdsubCatId: {
-      type: String,
-      default: "",
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
     },
     category: {
       type: mongoose.Schema.Types.ObjectId,
@@ -118,6 +141,15 @@ const productSchema = mongoose.Schema(
         createdAt: {
           type: Date,
           default: Date.now,
+        },
+        sellerReply: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+        sellerRepliedAt: {
+          type: Date,
+          default: null,
         },
       },
     ],

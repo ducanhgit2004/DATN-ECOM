@@ -10,12 +10,8 @@ import { MyContext } from "../../App";
 import { editData, fetchDataFromApi } from "../../utils/api";
 
 const statusOptions = [
-  { value: "pending", label: "Pending" },
-  { value: "confirmed", label: "Confirmed" },
   { value: "delivered", label: "Delivered" },
 ];
-
-const statusRank = { pending: 0, confirmed: 1, processing: 1, shipped: 1, delivered: 2 };
 
 const money = (value, currency = "USD") => {
   try {
@@ -181,7 +177,6 @@ const Orders = () => {
             <tbody className="divide-y divide-gray-100">
               {paginatedOrders.map((order) => {
                 const expanded = expandedId === order._id;
-                const currentRank = statusRank[order.orderStatus] ?? 0;
                 const itemCount = (order.items || []).reduce(
                   (total, item) => total + Number(item.quantity || 0),
                   0,
@@ -191,7 +186,6 @@ const Orders = () => {
                     key={order._id}
                     order={order}
                     expanded={expanded}
-                    currentRank={currentRank}
                     itemCount={itemCount}
                     updating={updatingId === order._id}
                     onToggle={() => setExpandedId(expanded ? "" : order._id)}
@@ -229,7 +223,6 @@ const Orders = () => {
 const FragmentRow = ({
   order,
   expanded,
-  currentRank,
   itemCount,
   updating,
   onToggle,
@@ -270,19 +263,25 @@ const FragmentRow = ({
           size="small"
           fullWidth
           value={
-            ["processing", "shipped"].includes(order.orderStatus)
-              ? "confirmed"
-              : order.orderStatus
+            order.orderStatus === "delivered" ? "delivered" : ""
           }
-          disabled={updating || order.orderStatus === "cancelled"}
+          displayEmpty
+          disabled={
+            updating ||
+            !["confirmed", "processing", "shipped"].includes(order.orderStatus)
+          }
           onChange={(event) => onStatusChange(event.target.value)}
           className="!bg-white !text-sm !font-semibold"
         >
+          <MenuItem value="" disabled>
+            {order.orderStatus === "pending"
+              ? "Awaiting seller confirmation"
+              : order.orderStatus}
+          </MenuItem>
           {statusOptions.map((option) => (
             <MenuItem
               key={option.value}
               value={option.value}
-              disabled={statusRank[option.value] < currentRank}
             >
               {option.label}
             </MenuItem>

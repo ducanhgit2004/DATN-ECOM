@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
+import { isValidPhone, normalizePhone } from "../../utils/phone";
 
 const MyAccount = () => {
   const context = useContext(MyContext);
@@ -56,6 +57,11 @@ const MyAccount = () => {
 
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
+
+    if (!isValidPhone(formData.mobile)) {
+      context?.alertBox?.("error", "Phone number must contain 9 to 15 digits.");
+      return;
+    }
 
     if (!context?.userData?._id) {
       context?.alertBox?.("error", "User data is not available yet");
@@ -264,10 +270,7 @@ const MyAccount = () => {
                     onChange={(value) => {
                       setFormData((previousData) => ({
                         ...previousData,
-                        mobile:
-                          typeof value === "string"
-                            ? value
-                            : String(value ?? ""),
+                        mobile: normalizePhone(value),
                       }));
                     }}
                     inputClassName="!w-full"

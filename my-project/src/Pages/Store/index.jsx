@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { IoChatbubbleEllipsesOutline } from "react-icons/io5";
 import ProductItem from "../../components/ProductItem";
-import { fetchDataFromApi } from "../../utils/api";
+import { fetchDataFromApi, postData } from "../../utils/api";
+import { MyContext } from "../../App";
 
 const StorePage = () => {
   const { sellerId } = useParams();
+  const navigate = useNavigate();
+  const context = useContext(MyContext);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -54,6 +58,16 @@ const StorePage = () => {
   }
 
   const { store } = data;
+  const startChat = async () => {
+    if (!context?.isLogin) {
+      context?.alertBox?.("error", "Please login to chat with the shop.");
+      navigate("/login");
+      return;
+    }
+    const result = await postData("/api/chat/conversations", { sellerId });
+    if (result?.success) navigate(`/messages?conversation=${result.data._id}`);
+    else context?.alertBox?.("error", result?.message || "Unable to start chat.");
+  };
   return (
     <main className="bg-[#f7f7f7] pb-14">
       <section className="relative bg-white">
@@ -89,6 +103,13 @@ const StorePage = () => {
             <strong className="block text-xl">{data.productCount}</strong>
             <span className="text-xs text-gray-500">Products</span>
           </div>
+          <button
+            type="button"
+            onClick={startChat}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff5252] px-5 py-3 font-semibold text-white hover:bg-[#e64747]"
+          >
+            <IoChatbubbleEllipsesOutline /> Chat with shop
+          </button>
         </div>
       </section>
 

@@ -1,4 +1,4 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Search from "../Search";
 import Navigation from "./Navigation";
@@ -15,6 +15,7 @@ import { FaRegUser } from "react-icons/fa";
 import { IoBagCheckOutline } from "react-icons/io5";
 import { IoMdHeartEmpty } from "react-icons/io";
 import { IoIosLogOut } from "react-icons/io";
+import { IoChatbubbleEllipsesOutline } from "react-icons/io5";
 
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
@@ -30,6 +31,7 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
 }));
 
 const Header = () => {
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
   const handleClick = (event) => {
@@ -50,23 +52,23 @@ const Header = () => {
 
   const history = useNavigate();
 
-  const logout = () => {
-    setAnchorEl(null);
-
-    fetchDataFromApi("/api/user/logout")
-      .then(() => {
-        localStorage.removeItem("accesstoken");
-        localStorage.removeItem("refreshToken");
-        context.setUserData(null);
-        context.setIsLogin(false);
-        history("/");
-      })
-      .catch(() => {
-        localStorage.removeItem("accesstoken");
-        localStorage.removeItem("refreshToken");
-        context.setUserData(null);
-        context.setIsLogin(false);
+  useEffect(() => {
+    if (!context?.isLogin) {
+      return undefined;
+    }
+    const refresh = () =>
+      fetchDataFromApi("/api/chat/unread-count").then((result) => {
+        if (result?.success) setUnreadMessages(Number(result.data?.count) || 0);
       });
+    refresh();
+    const timer = window.setInterval(refresh, 20000);
+    return () => window.clearInterval(timer);
+  }, [context?.isLogin]);
+
+  const logout = async () => {
+    setAnchorEl(null);
+    await context.logout();
+    history("/", { replace: true });
   };
 
   return (
@@ -76,7 +78,7 @@ const Header = () => {
           <div className="flex items-center justify-between">
             <div className="w-[50%]">
               <p className="text-[14px] font-[500]">
-                Free Shipping Over $100 & Free Returns
+                Free Shipping From $200 & Free Returns
               </p>
             </div>
 
@@ -91,7 +93,7 @@ const Header = () => {
               </li>
               <li>
                 <Link
-                  to="/order-tracking"
+                  to="/my-orders"
                   className="text-[13px] font-[500] hover:text-red-500"
                 >
                   Order Tracking
@@ -239,19 +241,46 @@ const Header = () => {
                 </>
               )}
 
+              {context.isLogin && (
+                <li>
+                  <Tooltip title="Messages">
+                    <Link to="/messages">
+                      <IconButton aria-label="messages">
+                        <StyledBadge
+                          badgeContent={unreadMessages}
+                          color="secondary"
+                        >
+                          <IoChatbubbleEllipsesOutline size={24} />
+                        </StyledBadge>
+                      </IconButton>
+                    </Link>
+                  </Tooltip>
+                </li>
+              )}
+
               <li>
                 <Tooltip title="Compare">
-                  <IconButton aria-label="compare">
-                    <IoGitCompareOutline size={24} />
-                  </IconButton>
+                  <Link to="/compare">
+                    <IconButton aria-label="compare">
+                      <StyledBadge
+                        badgeContent={context?.compareIds?.length || 0}
+                        color="secondary"
+                      >
+                        <IoGitCompareOutline size={24} />
+                      </StyledBadge>
+                    </IconButton>
+                  </Link>
                 </Tooltip>
               </li>
 
               <li>
                 <Tooltip title="Wishlist">
-                  <Link to="/my-list">
+                  <Link to={context?.isLogin ? "/my-list" : "/login"}>
                     <IconButton aria-label="wishlist">
-                      <StyledBadge badgeContent={displayedWishlistCount} color="secondary">
+                      <StyledBadge
+                        badgeContent={displayedWishlistCount}
+                        color="secondary"
+                      >
                         <FaRegHeart size={24} />
                       </StyledBadge>
                     </IconButton>

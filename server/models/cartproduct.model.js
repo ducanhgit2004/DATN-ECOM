@@ -5,6 +5,7 @@ const cartProduct = new mongoose.Schema(
     productId: {
       type: mongoose.Schema.ObjectId,
       ref: "Product",
+      required: true,
     },
     quantity: {
       type: Number,
@@ -17,11 +18,17 @@ const cartProduct = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.ObjectId,
       ref: "User",
+      required: true,
     },
   },
   {
     timestamps: true,
   },
+);
+
+cartProduct.index(
+  { userId: 1, productId: 1, size: 1 },
+  { unique: true },
 );
 
 const CartProductModel = mongoose.model("cartProduct", cartProduct);
