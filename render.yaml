@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: novacart-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: EMAIL
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: JSON_WEB_TOKEN_SECRET_KEY
+        generateValue: true
+      - key: SECRET_KEY_ACCESS_TOKEN
+        generateValue: true
+      - key: SECRET_KEY_REFRESH_TOKEN
+        generateValue: true
+      - key: cloudinary_Config_Cloud_Name
+        sync: false
+      - key: cloudinary_Config_api_key
+        sync: false
+      - key: cloudinary_Config_api_secret
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_CURRENCY
+        value: USD
+      - key: PAYPAL_MODE
+        value: sandbox
+      - key: PAYPAL_CLIENT_ID_TEST
+        sync: false
+      - key: PAYPAL_SECRET_TEST
+        sync: false
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_CURRENCY
+        value: USD
+      - key: PAYPAL_CLIENT_ID_LIVE
+        sync: false
+      - key: PAYPAL_SECRET_LIVE
+        sync: false
